@@ -72,7 +72,7 @@ src/backend/
   Sonrisa.Application      use cases and ports
     Services/                AlertService, DestinationService, NotificationService, AdminQueryService,
                              AuditService, EventIngestor, DeliveryProcessor
-    Abstractions/            repository interfaces, INotificationChannel, IEventSource, IClock
+    Abstractions/            repository interfaces, INotificationChannel, IEventSource (time: .NET `TimeProvider`, D23)
     Registries/              ChannelRegistry, CategoryRegistry, SourceRegistry
     Mapping/                 entity → DTO mapping (hand-written)
     Configuration/           options classes used by services (poll intervals, retry delays, timeouts, assets)
@@ -171,9 +171,9 @@ sequenceDiagram
 
 - `AddIdentityApiEndpoints<AppUser>()` + `AddRoles<IdentityRole>()` + `MapIdentityApi<AppUser>()` on a route group under `/api/auth`; bearer tokens (not cookies). `AppUser` lives in `Infrastructure/Persistence` (it depends on the Identity package); Domain entities refer to users only by `UserId`.
 - `POST /api/auth/logout` in `AuthController` (authorized): `UpdateSecurityStampAsync` → the old refresh token fails at `/refresh` (F8). Access-token lifetime 10 minutes.
-- A middleware at the start of the pipeline answers 404 for every `/api/auth` path except register, login, refresh and logout (S1, D22). An endpoint filter on the Identity route group writes audit entries for register and login (S2) (spec §2.8, unverified, fallback: own endpoints).
+- A middleware at the start of the pipeline answers 404 for every `/api/auth` path except register, login, refresh and logout (S1, D22). An endpoint filter on the Identity route group writes audit entries for register and login (S2, verified; spec §2.8). `GET /api/me` (outside `/api/auth`) returns the caller's email and roles, because the SPA cannot read the opaque bearer token (D23).
 - **Frontend tokens (D20):** the access token is kept in memory only; the refresh token in `sessionStorage`, so a page reload keeps the user logged in and closing the tab ends the session. An HTTP interceptor adds the bearer header and calls `/refresh` once on 401; logout calls `/logout` and clears both. Route guards: logged-in, admin. Known limit: script injection (XSS) could read the refresh token (spec §7).
-- Admin endpoints: controllers under `Controllers/Admin/`, route prefix `/api/admin`, `[Authorize(Roles = "Admin")]` on each. AC3 enumerates every endpoint with the `/api/admin` prefix from the endpoint data source (unverified that controller actions appear there with their metadata, §7).
+- Admin endpoints: controllers under `Controllers/Admin/`, route prefix `/api/admin`, `[Authorize(Roles = "Admin")]` on each. AC3 enumerates every endpoint with the `/api/admin` prefix from the endpoint data source (verified in S2).
 
 ## 4. Data model
 
@@ -238,7 +238,7 @@ Identity tables (`AspNetUsers`, `AspNetRoles`, …) come from `IdentityDbContext
 - **Context:** real register, login and logout (D2, D5); roles for the admin view (T51); `MapIdentityApi` has no logout and its tokens are stateless (F8).
 - **Decision:** `AddIdentityApiEndpoints` + `AddRoles<IdentityRole>()` + `MapIdentityApi`, bearer tokens; `/api/auth/logout` updates the security stamp so the refresh token is rejected; access-token lifetime 10 minutes (D9); one `Admin` role, seeded admin from env (T51). Audit via an endpoint filter on the Identity route group; the 404 for unused endpoints via a middleware at the start of the pipeline (D22). In the browser: access token in memory, refresh token in `sessionStorage` (D20).
 - **Alternatives:** (a) own JWT issuing: full control (token revocation lists), but security code we would have to write and test; (b) cookie auth: simpler logout and no token in script reach, but CSRF handling, and the spec chose bearer tokens; (c) per-request security-stamp validation (rejected in D9); (d) both tokens in `localStorage`: survives a browser restart, but both are readable by injected script; (e) memory only: safest, but every reload logs out, which gets in the way of the manual checks.
-- **Consequences:** an access token stays valid up to 10 minutes after logout; the refresh token is readable by injected script for the life of the tab (spec §7). The role claim in the bearer token and the audit endpoint filter are unverified and checked in S2 (spec §8); `MapIdentityApi` on a prefixed group is verified in the source (S1). If the filter cannot see the result, own `/register` and `/login` endpoints replace the mapped ones.
+- **Consequences:** an access token stays valid up to 10 minutes after logout; the refresh token is readable by injected script for the life of the tab (spec §7). The role claim in the bearer token and the audit endpoint filter were verified in S2 (spec §8); `MapIdentityApi` on a prefixed group in S1.
 
 ### ADR-5 Market state: last observation in memory, alert state in the database
 
@@ -250,5 +250,5 @@ Identity tables (`AspNetUsers`, `AspNetRoles`, …) come from `IdentityDbContext
 ## 7. Open points for the slices
 
 - **New packages** (rule 4, approval with a version check on NuGet / npm in the slice that first needs them): `Npgsql.EntityFrameworkCore.PostgreSQL`, `Microsoft.AspNetCore.Identity.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Design` (S1, Infrastructure only; Application and Domain stay free of EF Core); `xunit`, `Microsoft.AspNetCore.Mvc.Testing`, `Testcontainers.PostgreSql` (S1, D20); MailKit (approved, D13, S4); Angular (S1).
-- **Unverified framework behavior, checked in the named slice** (also in spec §8): controller actions appear in the endpoint data source with their `[Authorize]` metadata (S2, AC3); `MapIdentityApi` works on a `/api/auth` group (S1); insert of delivery rows that relies on the unique index inside the event transaction, with EF Core or raw SQL (S3b); jsonb mapping of `Rule`, `Config`, `State` and `Data` with the Npgsql provider (S3a/S3b); Testcontainers on the GitHub Actions runner (S1).
+- **Unverified framework behavior, checked in the named slice** (also in spec §8): `MapIdentityApi` works on a `/api/auth` group (S1); insert of delivery rows that relies on the unique index inside the event transaction, with EF Core or raw SQL (S3b); jsonb mapping of `Rule`, `Config`, `State` and `Data` with the Npgsql provider (S3a/S3b); Testcontainers on the GitHub Actions runner (S1).
 - Unverified source and service facts: spec §8.

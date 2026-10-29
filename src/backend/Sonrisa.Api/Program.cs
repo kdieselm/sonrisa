@@ -1,5 +1,6 @@
 using Sonrisa.Api.Configuration;
 using Sonrisa.Api.Middleware;
+using Sonrisa.Application.Services;
 using Sonrisa.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,11 +9,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddPersistence(sp => sp.GetRequiredService<IConfiguration>().GetConnectionString("Default")
     ?? throw new InvalidOperationException("Connection string 'Default' is not configured."));
 builder.Services.AddAuth();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<AuditService>();
+builder.Services.AddScoped<AdminQueryService>();
 builder.Services.AddControllers();
 
 var app = builder.Build();
 
 await app.MigrateDatabaseAsync();
+await app.SeedAdminAsync();
 
 app.UseMiddleware<UnusedIdentityEndpointsMiddleware>();
 app.UseAuthentication();

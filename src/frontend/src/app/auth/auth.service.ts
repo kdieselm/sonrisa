@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, catchError, finalize, map, of, shareReplay, tap } from 'rxjs';
+import { Observable, catchError, finalize, map, of, shareReplay, switchMap, tap } from 'rxjs';
 
 /** Response of `/api/auth/login` and `/api/auth/refresh` (ASP.NET Core `AccessTokenResponse`). */
 interface AccessTokenResponse {
@@ -8,6 +8,12 @@ interface AccessTokenResponse {
   accessToken: string;
   expiresIn: number;
   refreshToken: string;
+}
+
+/** Response of `/api/me`. */
+interface Me {
+  email: string;
+  roles: string[];
 }
 
 const REFRESH_TOKEN_KEY = 'sonrisa.refreshToken';
@@ -23,10 +29,13 @@ export class AuthService {
 
   private readonly accessTokenSignal = signal<string | null>(null);
   private readonly emailSignal = signal<string | null>(sessionStorage.getItem(EMAIL_KEY));
+  private readonly rolesSignal = signal<readonly string[]>([]);
   private refreshInFlight: Observable<boolean> | null = null;
 
   readonly isLoggedIn = computed(() => this.accessTokenSignal() !== null);
   readonly email = this.emailSignal.asReadonly();
+  /** Only decides what the UI shows; the admin API checks the role itself (403 for others). */
+  readonly isAdmin = computed(() => this.isLoggedIn() && this.rolesSignal().includes('Admin'));
 
   get accessToken(): string | null {
     return this.accessTokenSignal();
@@ -43,8 +52,13 @@ export class AuthService {
         this.emailSignal.set(email);
         this.storeTokens(tokens);
       }),
-      map(() => undefined),
+      switchMap(() => this.loadRoles()),
     );
+  }
+
+  /** Restores the session after a page reload: new access token, then the roles. */
+  restoreSession(): Observable<void> {
+    return this.refresh().pipe(switchMap((ok) => (ok ? this.loadRoles() : of(undefined))));
   }
 
   /** Gets a new access token with the stored refresh token. Emits false (and clears the session) on failure. */
@@ -86,9 +100,22 @@ export class AuthService {
 
   clearSession(): void {
     this.accessTokenSignal.set(null);
+    this.rolesSignal.set([]);
     this.emailSignal.set(null);
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
     sessionStorage.removeItem(EMAIL_KEY);
+  }
+
+  /** Reads the caller's roles from `/api/me`. A failure leaves no roles (the admin area stays hidden). */
+  private loadRoles(): Observable<void> {
+    return this.http.get<Me>('/api/me').pipe(
+      tap((me) => this.rolesSignal.set(me.roles)),
+      catchError(() => {
+        this.rolesSignal.set([]);
+        return of(undefined);
+      }),
+      map(() => undefined),
+    );
   }
 
   private storeTokens(tokens: AccessTokenResponse): void {

@@ -16,7 +16,8 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideHttpClient(withInterceptors([authInterceptor])),
     provideRouter(routes),
-    // After a reload only the refresh token survives (D20): get a new access token before the first route runs.
-    provideAppInitializer(() => firstValueFrom(inject(AuthService).refresh())),
+    // After a reload only the refresh token survives (D20): get a new access token and the roles before the
+    // first route runs, so the admin guard can decide synchronously.
+    provideAppInitializer(() => firstValueFrom(inject(AuthService).restoreSession(), { defaultValue: undefined })),
   ],
 };

@@ -3,9 +3,9 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using static Sonrisa.Tests.Integration.TestApi;
 
 namespace Sonrisa.Tests.Integration;
 
@@ -13,7 +13,6 @@ namespace Sonrisa.Tests.Integration;
 [Collection(PostgresCollection.Name)]
 public sealed class AuthTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private const string Password = "Test-Password1!";
     private ApiFactory _factory = null!;
     private HttpClient _client = null!;
 
@@ -38,7 +37,7 @@ public sealed class AuthTests(PostgresFixture postgres) : IAsyncLifetime
         var register = await _client.PostAsJsonAsync("/api/auth/register", new { email, password = Password }, Ct);
         Assert.Equal(HttpStatusCode.OK, register.StatusCode);
 
-        var tokens = await LoginAsync(email);
+        var tokens = await _client.LoginAsync(email);
         Assert.False(string.IsNullOrEmpty(tokens.AccessToken));
         Assert.False(string.IsNullOrEmpty(tokens.RefreshToken));
     }
@@ -47,7 +46,7 @@ public sealed class AuthTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task Register_twice_with_same_email_fails()
     {
         var email = NewEmail();
-        await RegisterAsync(email);
+        await _client.RegisterAsync(email);
 
         var second = await _client.PostAsJsonAsync("/api/auth/register", new { email, password = Password }, Ct);
         Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
@@ -57,7 +56,7 @@ public sealed class AuthTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task Login_with_wrong_password_returns_401()
     {
         var email = NewEmail();
-        await RegisterAsync(email);
+        await _client.RegisterAsync(email);
 
         var login = await _client.PostAsJsonAsync("/api/auth/login", new { email, password = "Wrong-Password1!" }, Ct);
         Assert.Equal(HttpStatusCode.Unauthorized, login.StatusCode);
@@ -66,7 +65,7 @@ public sealed class AuthTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Refresh_works_before_logout()
     {
-        var tokens = await RegisterAndLoginAsync();
+        var (_, tokens) = await _client.RegisterAndLoginAsync();
 
         var refresh = await _client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = tokens.RefreshToken }, Ct);
         Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
@@ -75,9 +74,9 @@ public sealed class AuthTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Refresh_with_old_refresh_token_returns_401_after_logout()
     {
-        var tokens = await RegisterAndLoginAsync();
+        var (_, tokens) = await _client.RegisterAndLoginAsync();
 
-        var logout = await SendAuthorizedAsync(HttpMethod.Post, "/api/auth/logout", tokens.AccessToken);
+        var logout = await _client.SendAuthorizedAsync(HttpMethod.Post, "/api/auth/logout", tokens.AccessToken);
         Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
 
         var refresh = await _client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = tokens.RefreshToken }, Ct);
@@ -98,7 +97,7 @@ public sealed class AuthTests(PostgresFixture postgres) : IAsyncLifetime
             .Get(IdentityConstants.BearerScheme);
         Assert.Equal(TimeSpan.FromMinutes(10), options.BearerTokenExpiration);
 
-        var tokens = await RegisterAndLoginAsync();
+        var (_, tokens) = await _client.RegisterAndLoginAsync();
         Assert.Equal(600, tokens.ExpiresIn);
     }
 
@@ -106,12 +105,12 @@ public sealed class AuthTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task Access_token_issued_before_logout_still_works_until_it_expires()
     {
         // Documents the known limit of spec §7: only the refresh token is invalidated by logout.
-        var tokens = await RegisterAndLoginAsync();
+        var (_, tokens) = await _client.RegisterAndLoginAsync();
 
-        var first = await SendAuthorizedAsync(HttpMethod.Post, "/api/auth/logout", tokens.AccessToken);
+        var first = await _client.SendAuthorizedAsync(HttpMethod.Post, "/api/auth/logout", tokens.AccessToken);
         Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
 
-        var second = await SendAuthorizedAsync(HttpMethod.Post, "/api/auth/logout", tokens.AccessToken);
+        var second = await _client.SendAuthorizedAsync(HttpMethod.Post, "/api/auth/logout", tokens.AccessToken);
         Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
     }
 
@@ -145,7 +144,7 @@ public sealed class AuthTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task Unused_identity_endpoints_return_404_for_authenticated_callers(string method, string path,
         string? body)
     {
-        var tokens = await RegisterAndLoginAsync();
+        var (_, tokens) = await _client.RegisterAndLoginAsync();
         var request = CreateRequest(method, path, body);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
 
@@ -158,36 +157,4 @@ public sealed class AuthTests(PostgresFixture postgres) : IAsyncLifetime
         {
             Content = body is null ? null : new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
         };
-
-    private static CancellationToken Ct => TestContext.Current.CancellationToken;
-
-    private static string NewEmail() => $"user-{Guid.NewGuid():N}@example.test";
-
-    private async Task RegisterAsync(string email)
-    {
-        var response = await _client.PostAsJsonAsync("/api/auth/register", new { email, password = Password }, Ct);
-        response.EnsureSuccessStatusCode();
-    }
-
-    private async Task<AccessTokenResponse> LoginAsync(string email)
-    {
-        var response = await _client.PostAsJsonAsync("/api/auth/login", new { email, password = Password }, Ct);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<AccessTokenResponse>(Ct))!;
-    }
-
-    private async Task<AccessTokenResponse> RegisterAndLoginAsync()
-    {
-        var email = NewEmail();
-        await RegisterAsync(email);
-        return await LoginAsync(email);
-    }
-
-    private Task<HttpResponseMessage> SendAuthorizedAsync(HttpMethod method, string path, string accessToken,
-        HttpContent? content = null)
-    {
-        var request = new HttpRequestMessage(method, path) { Content = content };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        return _client.SendAsync(request, Ct);
-    }
 }

@@ -385,3 +385,64 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: Three API log lines looked like errors on the first start: (1) `fail: … Failed executing DbCommand … FROM "__EFMigrationsHistory"`; (2) `libgssapi_krb5.so.2: cannot open shared object file`; (3) data-protection keys "may not be persisted outside of the container".
 - What I did instead: (1) EF queries the history table before creating it on an empty database; the migration is applied right after. Expected, no change. (2) Npgsql looks for the Kerberos library, which the `aspnet` image does not have. Kerberos/GSSAPI auth is not used, so there is no change. (3) Real: recreating the API container invalidates every token. Added to spec §7 as a known limit, no fix in the MVP.
 - How I verified: `dotnet test --solution src/backend/Sonrisa.slnx`: 30/30 passed (Testcontainers on Docker Desktop 29.9.2). `docker compose up --build -d` from `.env.example`: db and mailpit healthy, api and web up. Smoke test through nginx on `http://localhost:8080`: `/` and `/login` 200 (SPA fallback); register OK; login `expiresIn` = 600; refresh before logout OK; logout 204; refresh after logout **401**; anonymous `/api/auth/manage/info` **404**; Mailpit UI on 8025 is 200. Testcontainers on GitHub Actions is still unverified, because there is no remote yet.
+
+## S2 – admin area and audit log (Claude Code session 06)
+
+### [2026-10-29 17:20] D23 – S2 plan
+- Type: decision
+- What the AI proposed / generated: A 7-step plan: `AuditEntry` + migration; `AuditService` written from `AuthController.Logout` and from an endpoint filter on the Identity group; idempotent admin seeding from `SEED_ADMIN_*`; `/api/admin/users` and `/api/admin/audit` (paged) with `[Authorize(Roles = "Admin")]`; `GET /api/me` (email, roles) so the SPA knows whether to show the admin area; tests for AC3 (routes enumerated from the endpoint data source), AC12 auth part and seeding; Angular admin guard and two pages. It also proposed .NET's built-in `TimeProvider` instead of the own `IClock` port of architecture §2.
+- What was wrong with it / what I weighed: The bearer token is opaque, so the SPA cannot read the role from it; a `/me` endpoint is needed. It must stay outside `/api/auth`, because the middleware of D22 blocks every other path there. `TimeProvider` is part of the BCL since .NET 8 and does the same job as `IClock` without own code. The per-user alerts and destinations of the admin user view (spec §2.9) come with S3b, when those tables exist.
+- What I did instead: Approved as proposed. `/me` lives at `/api/me`; `TimeProvider` replaces `IClock` (architecture §2 updated in this slice).
+- How I verified: n/a (plan approval).
+
+### [2026-10-29 17:21] Check – role claim and login result in the framework source
+- Type: check
+- What the AI proposed / generated: Two assumptions behind the plan: (1) `AddRoles<IdentityRole>()` puts role claims into the bearer principal; (2) an endpoint filter on the Identity group can tell a successful login from a failed one.
+- What was wrong with it / what I weighed: Both are listed as unverified in spec §8 and the CLAUDE.md risk list.
+- What I did instead: Read the `release/10.0` source. (1) `IdentityBuilder.AddRoles` calls `Services.AddScoped(IUserClaimsPrincipalFactory<TUser>, UserClaimsPrincipalFactory<TUser, TRole>)`: plain `AddScoped`, not `TryAdd`, so this registration comes last and wins, and that factory adds the role claims. (2) `/register` returns `Results<Ok, ValidationProblem>`; `/login` returns `Results<Ok<AccessTokenResponse>, EmptyHttpResult, ProblemHttpResult>`, where a bearer login returns `Empty` (the sign-in handler already wrote the token) and every failure (wrong password, lockout, 2FA) returns `Problem` with 401. The filter therefore unwraps the `Results<…>` wrapper (`INestedHttpResult`) and treats a status code ≥ 400 as failure. Runtime confirmation: the S2 integration tests.
+- How I verified: `src/Identity/Extensions.Core/src/IdentityBuilder.cs` and `src/Identity/Core/src/IdentityApiEndpointRouteBuilderExtensions.cs` on GitHub, branch `release/10.0`.
+
+### [2026-10-29 17:30] Check – generated migration `AddAuditEntries`
+- Type: check
+- What the AI proposed / generated: `dotnet ef migrations add AddAuditEntries` after adding `AuditEntry` and its configuration.
+- What was wrong with it / what I weighed: CLAUDE.md risk list: generated migration content must be read.
+- What I did instead: Read it. It creates only `AuditEntries` (`Id` bigint identity always, `At` timestamptz, `ActorUserId`, `Action`, `TargetType`, `TargetId`, `Outcome` stored as text) with indexes on `At` and `ActorUserId`; `Down` drops the table. No foreign key to `AspNetUsers`: intended, because a failed login with an unknown email has no user, and audit rows must outlive users. Identity tables are unchanged.
+- How I verified: Read `Persistence/Migrations/*_AddAuditEntries.cs` and the snapshot diff.
+
+### [2026-10-29 17:33] Check – S2 tests, and that they can fail
+- Type: check
+- What the AI proposed / generated: 14 new integration tests: AC3 (routes found in the endpoint data source; every `/api/admin` route 401 anonymous, 403 normal user, admitted for the seeded admin), `/api/me`, AC12 auth part (register, login, logout one entry each; failed login without actor; unknown email; refresh writes nothing; no password, email or token in any row; 403 on the audit endpoint; admin list newest first, page size capped at 100), seeding idempotent.
+- What was wrong with it / what I weighed: Passing tests prove little unless they fail when the code is wrong (review template point 4).
+- What I did instead: Mutation check: removed `AddEndpointFilter<IdentityAuditFilter>()` and replaced `[Authorize(Roles = "Admin")]` with `[Authorize]` on `AdminUsersController` → 5 tests failed (4 audit tests, the 403 test); code restored. The PowerShell round-trip of that check broke the UTF-8 `§` in the two files; fixed with `sed`, and the diff checked again.
+- How I verified: `dotnet test --solution src/backend/Sonrisa.slnx`: 44/44 passed before and after the mutation check; 39/44 with the mutation.
+
+### [2026-10-29 17:50] AI-review – S2 diff review (fresh subagent)
+- Type: ai-review
+- What the AI proposed / generated: The S2 diff, reviewed with [`prompts/templates/review.md`](../prompts/templates/review.md) by a subagent with no session history. It found no admin endpoint without the role check. Nine findings:
+  1. **Seeding promotes an existing account (high):** if the seed email already belonged to a self-registered user, startup added that user to `Admin`. Scenario: first start without `SEED_ADMIN_*`, a stranger registers that email, the operator then sets the variables, and the stranger becomes admin.
+  2. Missing seed config only logged a warning, so the app ran without an admin. This contradicts spec §2.8 and opens the window for 1.
+  3. The logout audit write could turn a completed logout into 500, was cancelled when the client disconnected, and wrote no `Failure` entry when the stamp update failed.
+  4. The login/register audit write was tied to `RequestAborted`, so a disconnect right after a successful login lost the entry.
+  5. `?page=2147483647` overflowed `(page − 1) · pageSize` → negative `OFFSET` → 500.
+  6. The "admin is admitted" test passed on 500 and 404.
+  7. Missing tests: register failure, lockout, seeding over an existing account, audit-write failure.
+  8. One test counted with different predicates before and after.
+  9. (unsure) Lockout might be audited as success.
+  - Spec note: AC12 also needs the alert-change and webhook-URL parts, which come in S3b.
+- What was wrong with it / what I weighed: Checked each finding against the code. 1–8 hold. 9 does not, per the source (log 17:21), but it is cheap to pin with a test. The audit-write-failure tests would need fault injection into the repository; they are skipped, and that path is covered by reading the code only.
+- What I did instead: 1, 2 → seeding throws at startup when the config is missing or the email belongs to a non-admin account; it never promotes an existing account. 3, 4 → audit writes use `CancellationToken.None` and are caught and logged in both places; a failed logout writes a `Failure` entry. 5 → `page` is clamped so the offset fits in `int`; a page past the end is empty. 6 → the test requires a success status. 8 → same predicate. New tests: failed register (failure, no actor), lockout (6 failures), huge page (200, empty), seed over a normal account (startup fails, no promotion), missing seed config (startup fails). AC12 stays open until S3b.
+- How I verified: `dotnet test --solution src/backend/Sonrisa.slnx`: 49/49 passed.
+
+### [2026-10-29 17:55] Check – S2 Compose run
+- Type: check
+- What the AI proposed / generated: `docker compose up --build -d` with the S2 images on the existing S1 database volume.
+- What was wrong with it / what I weighed: The startup migration and the new seeding had to work on a database that already has S1 data.
+- What I did instead: Nothing to change. The API applied `AddAuditEntries`, logged "Seed admin admin@example.local created" and started.
+- How I verified: Smoke test through nginx on `http://localhost:8080`: register 200; wrong password 401; normal user `/api/me` → no roles, `/api/admin/users` **403**; anonymous `/api/admin/audit` **401**; logout 204; admin `/api/me` → `["Admin"]`; the audit list shows register, login failure (no actor), login, admin login and logout, newest first; SPA route `/admin/audit` 200. The browser check is still open (D17).
+
+### [2026-10-29 18:15] Course-correction – no unbounded list reads
+- Type: course-correction
+- What the AI proposed / generated: `IUserDirectory.ListAsync` returned every user, plus every user–role row in a second query; `/api/admin/users` returned the whole list. `GetEmailsAsync` took any number of IDs.
+- What was wrong with it / what I weighed: I asked that no query return a whole table: the user list grows with every registration, and the admin view must not load it at once. For `GetEmailsAsync` the AI pointed out that paging does not fit: the caller passes IDs, and the only caller passes the actors of one audit page (≤ 100). A hard limit protects it just as well.
+- What I did instead: Shared `Application/Paging` (default 50, max 100, offset clamped so it cannot overflow), used by the audit and the user list. `ListAsync(page, pageSize)` returns one page ordered by email (then ID) plus the total; roles are loaded only for that page's users. `/api/admin/users` returns a `PagedResult`. `GetEmailsAsync` throws `ArgumentException` above 100 IDs. Angular: shared `Pager` component on both admin pages.
+- How I verified: New tests: user pages are disjoint and ordered, total is stable, page size is capped at 100, a page past the end is empty; `GetEmailsAsync` rejects 101 IDs and accepts 100. The user-list test walks every page. `dotnet test`: 51/51. Compose: `/api/admin/users?pageSize=1` returns one user with `total` 4; `pageSize=9999` is capped at 100.

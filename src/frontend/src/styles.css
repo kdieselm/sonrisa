@@ -45,7 +45,7 @@ a {
 }
 
 .content {
-  max-width: 40rem;
+  max-width: 64rem;
   margin: 2rem auto;
   padding: 0 1rem;
 }
@@ -107,4 +107,48 @@ button.link {
 .error {
   margin: 0;
   color: var(--error);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.mono {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs a {
+  padding: 0.5rem 0;
+  text-decoration: none;
+}
+
+.tabs a.active {
+  font-weight: 600;
+  border-bottom: 2px solid var(--accent);
+}
+
+/* Wide tables scroll inside the page instead of widening it. */
+.table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  margin-bottom: 1rem;
+}
+
+.table th,
+.table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
 }

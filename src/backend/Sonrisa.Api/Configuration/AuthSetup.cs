@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Identity;
+using Sonrisa.Api.Filters;
 using Sonrisa.Infrastructure.Persistence;
 
 namespace Sonrisa.Api.Configuration;
@@ -27,11 +28,14 @@ public static class AuthSetup
 
     /// <summary>
     /// Maps the Identity endpoints under <c>/api/auth</c>. The unused ones are blocked by
-    /// <see cref="Middleware.UnusedIdentityEndpointsMiddleware"/>.
+    /// <see cref="Middleware.UnusedIdentityEndpointsMiddleware"/>; register and login are audited by
+    /// <see cref="IdentityAuditFilter"/>.
     /// </summary>
     public static IEndpointRouteBuilder MapAuth(this IEndpointRouteBuilder app)
     {
-        app.MapGroup("/api/auth").MapIdentityApi<AppUser>();
+        app.MapGroup("/api/auth")
+            .AddEndpointFilter<IdentityAuditFilter>()
+            .MapIdentityApi<AppUser>();
         return app;
     }
 }

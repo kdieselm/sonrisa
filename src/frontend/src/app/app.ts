@@ -11,6 +11,9 @@ import { AuthService } from './auth/auth.service';
       <a routerLink="/" class="brand">Sonrisa</a>
       <nav>
         @if (auth.isLoggedIn()) {
+          @if (auth.isAdmin()) {
+            <a routerLink="/admin" routerLinkActive="active">Admin</a>
+          }
           <a routerLink="/account" routerLinkActive="active">{{ auth.email() }}</a>
           <button type="button" class="link" (click)="logout()">Log out</button>
         } @else {

@@ -13,3 +13,9 @@ export const guestGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   return auth.isLoggedIn() ? inject(Router).createUrlTree(['/']) : true;
 };
+
+/** Only admins (admin area). Hides the pages from others; the API answers 403 to them anyway. */
+export const adminGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  return auth.isAdmin() ? true : inject(Router).createUrlTree(['/']);
+};
