@@ -35,6 +35,9 @@ public sealed class DeliveryProcessor(
     DeliveryOptions settings,
     TimeProvider time)
 {
+    /// <summary>Added to the send timeout when a row is parked during a send.</summary>
+    private static readonly TimeSpan LeaseMargin = TimeSpan.FromSeconds(30);
+
     public async Task<ProcessResult> ProcessAsync(long deliveryId, CancellationToken stopping)
     {
         var work = await deliveries.GetWorkAsync(deliveryId, stopping);
@@ -56,6 +59,14 @@ public sealed class DeliveryProcessor(
         {
             return await FailWithoutAttemptAsync(delivery, DeliveryFailure.DestinationDeleted, "destination deleted",
                 stopping);
+        }
+
+        // A previous run counted its attempts and then died before it could record the outcome (see BeginAttempt):
+        // never send more than MaxAttempts times.
+        if (delivery.Attempts >= settings.MaxAttempts)
+        {
+            delivery.Fail(DeliveryFailure.SendFailed, "attempts used up without a recorded outcome");
+            return await SavedAsync(ProcessOutcome.Failed, delivery.Attempts, "attempts used up without a recorded outcome");
         }
 
         var category = categories.Find(alert.CategoryKey);
@@ -82,25 +93,29 @@ public sealed class DeliveryProcessor(
             return await FailAsync(delivery, $"The message could not be built ({ex.GetType().Name}).", stopping);
         }
 
+        // Write ahead: count the attempt and park the row for the length of the send plus a margin, saved before the
+        // send. A crash or a failing save afterwards cannot make the worker send the same row again every round.
+        var attempt = delivery.BeginAttempt(now + settings.SendTimeout + LeaseMargin);
+        if (!await deliveries.SaveAsync(stopping))
+        {
+            return new ProcessResult(ProcessOutcome.Skipped);
+        }
+
         var result = await SendAsync(channel, destination.Config, message, stopping);
-        var attempt = delivery.Attempts + 1;
         switch (result.Outcome)
         {
             case SendOutcome.Sent:
                 delivery.RecordSent(now);
-                await deliveries.SaveAsync(stopping);
-                return new ProcessResult(ProcessOutcome.Sent, attempt, null, null, channel.Key);
+                return await SavedAsync(ProcessOutcome.Sent, attempt, null, null, channel.Key);
 
             case SendOutcome.Retryable when attempt < settings.MaxAttempts:
                 var delay = NextDelay(settings, attempt, result.RetryAfter);
                 delivery.RecordRetry(result.Error ?? "Send failed.", now + delay);
-                await deliveries.SaveAsync(stopping);
-                return new ProcessResult(ProcessOutcome.WillRetry, attempt, result.Error, delay, channel.Key);
+                return await SavedAsync(ProcessOutcome.WillRetry, attempt, result.Error, delay, channel.Key);
 
             default:
                 delivery.RecordFinalFailure(result.Error ?? "Send failed.");
-                await deliveries.SaveAsync(stopping);
-                return new ProcessResult(ProcessOutcome.Failed, attempt, result.Error, null, channel.Key);
+                return await SavedAsync(ProcessOutcome.Failed, attempt, result.Error, null, channel.Key);
         }
     }
 
@@ -128,16 +143,19 @@ public sealed class DeliveryProcessor(
         }
     }
 
-    /// <summary>Delay after attempt <paramref name="attempt"/>: the list entry, or the destination's Retry-After (capped).</summary>
+    /// <summary>Delay after attempt <paramref name="attempt"/>: the list entry, or the destination's Retry-After if longer (capped).</summary>
     public static TimeSpan NextDelay(DeliveryOptions settings, int attempt, TimeSpan? retryAfter)
     {
+        var delays = settings.RetryDelays;
+        var scheduled = delays.Count == 0 ? TimeSpan.Zero : delays[Math.Min(attempt - 1, delays.Count - 1)];
         if (retryAfter is { } wanted)
         {
-            return wanted > settings.MaxRetryAfter ? settings.MaxRetryAfter : wanted;
+            // The destination can ask for longer than the schedule, never for shorter: "Retry-After: 0" must not burn
+            // all attempts at once (S4 review 9).
+            return wanted > settings.MaxRetryAfter ? settings.MaxRetryAfter : wanted < scheduled ? scheduled : wanted;
         }
 
-        var delays = settings.RetryDelays;
-        return delays.Count == 0 ? TimeSpan.Zero : delays[Math.Min(attempt - 1, delays.Count - 1)];
+        return scheduled;
     }
 
     private async Task<ProcessResult> FailWithoutAttemptAsync(Delivery delivery, DeliveryFailure failure,
@@ -150,10 +168,19 @@ public sealed class DeliveryProcessor(
 
     private async Task<ProcessResult> FailAsync(Delivery delivery, string error, CancellationToken ct)
     {
-        delivery.RecordFinalFailure(error);
-        await deliveries.SaveAsync(ct);
-        return new ProcessResult(ProcessOutcome.Failed, delivery.Attempts, error);
+        // Nothing was sent, so no attempt is counted (S4 review 8), same as the other failures before a send.
+        return await FailWithoutAttemptAsync(delivery, DeliveryFailure.SendFailed, error, ct);
     }
+
+    /// <summary>
+    /// Saves the outcome. If the row was changed meanwhile (a delete failed it during the send) the other writer's state
+    /// stands and this run reports <see cref="ProcessOutcome.Skipped"/> (S4 review 3).
+    /// </summary>
+    private async Task<ProcessResult> SavedAsync(ProcessOutcome outcome, int attempt, string? error,
+        TimeSpan? retryIn = null, string? channelKey = null) =>
+        await deliveries.SaveAsync(CancellationToken.None)
+            ? new ProcessResult(outcome, attempt, error, retryIn, channelKey)
+            : new ProcessResult(ProcessOutcome.Skipped, attempt, "superseded by a concurrent change", null, channelKey);
 
     private string AlertUrl(long alertId) =>
         $"{settings.PublicBaseUrl.TrimEnd('/')}/alerts/{alertId}";

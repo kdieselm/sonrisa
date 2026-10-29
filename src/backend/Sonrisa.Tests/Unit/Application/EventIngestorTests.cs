@@ -266,7 +266,7 @@ public sealed class EventIngestorTests
 
         public Task<DeliveryWork?> GetWorkAsync(long id, CancellationToken ct) => throw new NotSupportedException();
 
-        public Task SaveAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> SaveAsync(CancellationToken ct) => throw new NotSupportedException();
 
         public Task<(IReadOnlyList<AdminDeliveryRow> Items, int Total)> ListForAdminAsync(DeliveryStatus? status,
             int page, int pageSize, CancellationToken ct) => throw new NotSupportedException();

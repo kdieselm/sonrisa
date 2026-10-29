@@ -101,7 +101,7 @@ Assets: crypto `bitcoin`, `ethereum`, `solana`; stocks `AAPL`, `MSFT`, `NVDA`, `
 ### 2.7 Delivery (T33, T36, T64, T73)
 
 - A match creates one `Delivery` row per (alert, event, destination) with status `Pending`. Unique index on `(alertId, eventId, destinationId)` prevents double delivery. T33 says "channel"; the key is the destination because T67 allows several destinations per channel, and a channel key would drop the second one (D16).
-- A `BackgroundService` worker sends pending rows. Statuses: `Pending` → `Sent` | `Failed`. At most **3 attempts**; delays between attempts 10 s and 60 s. A `Retry-After` header replaces the delay, capped at 5 minutes; it still counts as an attempt. One failing send does not block others (T36).
+- A `BackgroundService` worker sends pending rows. Statuses: `Pending` → `Sent` | `Failed`. At most **3 attempts**; delays between attempts 10 s and 60 s. A `Retry-After` header replaces the delay when it is longer than the scheduled one, capped at 5 minutes; it still counts as an attempt. The attempt is counted before the send, so a crash costs at most 3 sends. One failing send does not block others (T36).
 - **Slack errors (D13):** 429, 5xx and timeouts are retried; any other 4xx is a final failure at once.
 - Each attempt stores the attempt count and last error (no secrets).
 
@@ -241,6 +241,7 @@ Cutting an item also drops the acceptance criteria that depend on it (named belo
 - **Resend after a crash (D20):** a crash between a successful send and the status update resends that one message on restart (at-least-once delivery).
 - **Market crossing during a restart (D20):** the first market poll after a restart has no previous value and emits nothing, so a threshold crossing that happens across a restart is missed.
 - **Refresh token in `sessionStorage` (D20):** injected script (XSS) could read it while the tab is open.
+- **Slack mock and SMTP (S4 review):** the anonymous mock receiver keeps the newest 500 messages and has no rate limit; SMTP credentials are protected by TLS only if `Channels:Email:UseStartTls` is on and the server offers it (the Compose default is Mailpit without credentials); the sends of one delivery round run one after another, so a round with many hung destinations takes up to batch size times the send timeout; the mock hook name is visible in the admin list and the log.
 - **Sessions end when the API container is recreated:** ASP.NET Core data-protection keys (which protect the bearer and refresh tokens) are stored inside the API container, so recreating it invalidates every token and users log in again. Persisting the keys is not needed for the demo.
 
 ## 8. Unverified facts (must be checked in the named slice, see `plan.md`)

@@ -13,6 +13,10 @@ public sealed class DeliveryConfiguration : IEntityTypeConfiguration<Delivery>
         builder.Property(d => d.Id).UseIdentityAlwaysColumn();
         builder.Property(d => d.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
         builder.Property(d => d.Failure).HasConversion<string>().HasMaxLength(32);
+
+        // Optimistic concurrency on the PostgreSQL row version: the worker holds a tracked row across a send, while a
+        // delete may fail the same row with a set-based update (S4 review 3).
+        builder.Property<uint>("xmin").HasColumnType("xid").ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
         builder.Property(d => d.LastError).HasMaxLength(Delivery.MaxErrorLength);
 
         // History is never cascaded away (architecture §4): alerts and destinations are soft-deleted.

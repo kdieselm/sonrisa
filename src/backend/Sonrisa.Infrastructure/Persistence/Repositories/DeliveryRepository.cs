@@ -40,7 +40,20 @@ public sealed class DeliveryRepository(AppDbContext db) : IDeliveryRepository
         return new DeliveryWork(delivery, alert, destination, item);
     }
 
-    public Task SaveAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
+    public async Task<bool> SaveAsync(CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The row changed under us (xmin token). Drop our stale copy; the other writer's state stands.
+            db.ChangeTracker.Clear();
+            return false;
+        }
+    }
 
     public async Task<(IReadOnlyList<NotificationRow> Items, int Total)> ListForUserAsync(string userId, int page,
         int pageSize, CancellationToken ct)

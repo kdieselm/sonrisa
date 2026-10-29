@@ -33,8 +33,12 @@ public interface IDeliveryRepository
     /// </summary>
     Task<DeliveryWork?> GetWorkAsync(long id, CancellationToken ct);
 
-    /// <summary>Saves changes made to a <see cref="DeliveryWork"/>.</summary>
-    Task SaveAsync(CancellationToken ct);
+    /// <summary>
+    /// Saves changes made to a <see cref="DeliveryWork"/>. Returns false, and saves nothing, if the row was changed by
+    /// someone else since it was read (for example a delete failed it while the send was in flight): the other writer's
+    /// state wins.
+    /// </summary>
+    Task<bool> SaveAsync(CancellationToken ct);
 
     /// <summary>The admin delivery log: all rows, newest first, optionally of one status (spec §2.9).</summary>
     Task<(IReadOnlyList<AdminDeliveryRow> Items, int Total)> ListForAdminAsync(DeliveryStatus? status, int page,

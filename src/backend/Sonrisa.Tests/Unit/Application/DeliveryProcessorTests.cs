@@ -216,8 +216,11 @@ public sealed class DeliveryProcessorTests
         await stopping.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+
+        // Still pending; the attempt was counted before the send and the row is parked for the length of a send.
         Assert.Equal(DeliveryStatus.Pending, repo.Delivery.Status);
-        Assert.Equal(0, repo.Delivery.Attempts);
+        Assert.Equal(1, repo.Delivery.Attempts);
+        Assert.True(repo.Delivery.NextAttemptAt > T0.AddSeconds(15));
     }
 
     [Fact]
@@ -229,7 +232,78 @@ public sealed class DeliveryProcessorTests
 
         Assert.Equal(ProcessOutcome.Failed, result.Outcome);
         Assert.Equal(DeliveryFailure.SendFailed, repo.Delivery.Failure);
+        Assert.Equal(0, repo.Delivery.Attempts);
         Assert.Empty(_channel.Sent);
+    }
+
+    [Fact]
+    public async Task The_attempt_is_counted_and_saved_before_the_send()
+    {
+        var (processor, repo) = Build();
+        var attemptsAtSend = -1;
+        var savesAtSend = -1;
+        _channel.OnSend = () =>
+        {
+            attemptsAtSend = repo.Delivery.Attempts;
+            savesAtSend = repo.Saves;
+        };
+
+        await processor.ProcessAsync(1, Ct);
+
+        Assert.Equal(1, attemptsAtSend);
+        Assert.Equal(1, savesAtSend);
+        Assert.Equal(2, repo.Saves);
+    }
+
+    [Fact]
+    public async Task A_row_whose_attempts_are_used_up_without_an_outcome_is_failed_and_not_sent_again()
+    {
+        var (processor, repo) = Build();
+        for (var i = 0; i < 3; i++)
+        {
+            repo.Delivery.BeginAttempt(T0);
+        }
+
+        var result = await processor.ProcessAsync(1, Ct);
+
+        Assert.Equal(ProcessOutcome.Failed, result.Outcome);
+        Assert.Equal(DeliveryStatus.Failed, repo.Delivery.Status);
+        Assert.Empty(_channel.Sent);
+    }
+
+    [Fact]
+    public async Task A_row_changed_by_someone_else_during_the_send_is_left_alone()
+    {
+        var (processor, repo) = Build();
+        _channel.OnSend = () => repo.SaveResult = false;
+
+        var result = await processor.ProcessAsync(1, Ct);
+
+        Assert.Equal(ProcessOutcome.Skipped, result.Outcome);
+    }
+
+    [Fact]
+    public async Task A_failed_pre_send_save_means_nothing_is_sent()
+    {
+        var (processor, repo) = Build();
+        repo.SaveResult = false;
+
+        var result = await processor.ProcessAsync(1, Ct);
+
+        Assert.Equal(ProcessOutcome.Skipped, result.Outcome);
+        Assert.Empty(_channel.Sent);
+    }
+
+    [Fact]
+    public async Task A_retry_after_of_zero_does_not_shorten_the_schedule()
+    {
+        var (processor, repo) = Build();
+        _channel.Results.Enqueue(SendResult.Retryable("429", TimeSpan.Zero));
+
+        var result = await processor.ProcessAsync(1, Ct);
+
+        Assert.Equal(TimeSpan.FromSeconds(10), result.RetryIn);
+        Assert.Equal(T0.AddSeconds(10), repo.Delivery.NextAttemptAt);
     }
 
     [Fact]
@@ -251,6 +325,7 @@ public sealed class DeliveryProcessorTests
         public List<FormattedMessage> Sent { get; } = [];
         public List<NotificationContent> Contents { get; } = [];
         public bool Hang { get; set; }
+        public Action? OnSend { get; set; }
         public Exception? Throw { get; set; }
 
         public string Key => ChannelKey;
@@ -272,6 +347,7 @@ public sealed class DeliveryProcessorTests
         public async Task<SendResult> SendAsync(string configJson, FormattedMessage message, CancellationToken ct)
         {
             Sent.Add(message);
+            OnSend?.Invoke();
             if (Throw is not null)
             {
                 throw Throw;
@@ -292,7 +368,14 @@ public sealed class DeliveryProcessorTests
 
         public Task<DeliveryWork?> GetWorkAsync(long id, CancellationToken ct) => Task.FromResult<DeliveryWork?>(work);
 
-        public Task SaveAsync(CancellationToken ct) => Task.CompletedTask;
+        public bool SaveResult { get; set; } = true;
+        public int Saves { get; private set; }
+
+        public Task<bool> SaveAsync(CancellationToken ct)
+        {
+            Saves++;
+            return Task.FromResult(SaveResult);
+        }
 
         public void Add(Delivery delivery) => throw new NotSupportedException();
 

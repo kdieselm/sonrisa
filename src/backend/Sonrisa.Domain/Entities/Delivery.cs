@@ -58,6 +58,19 @@ public sealed class Delivery
 
     public Event? Event { get; private set; }
 
+    /// <summary>
+    /// Counts the attempt <b>before</b> it is made and parks <see cref="NextAttemptAt"/> at <paramref name="leaseUntil"/>,
+    /// in a saved write of its own. If the process dies or the outcome cannot be saved, the row is due again only after
+    /// the lease and the attempt is already counted, so a crash costs at most <c>MaxAttempts</c> sends, not an endless
+    /// loop (S4 review 2). Returns the number of this attempt.
+    /// </summary>
+    public int BeginAttempt(DateTimeOffset leaseUntil)
+    {
+        Attempts++;
+        NextAttemptAt = Event.ToStoredPrecision(leaseUntil);
+        return Attempts;
+    }
+
     /// <summary>A successful attempt (spec §2.7): the delivery is done.</summary>
     public void RecordSent(DateTimeOffset now)
     {
@@ -66,14 +79,13 @@ public sealed class Delivery
             return;
         }
 
-        Attempts++;
         Status = DeliveryStatus.Sent;
         SentAt = Event.ToStoredPrecision(now);
         NextAttemptAt = null;
         Failure = null;
     }
 
-    /// <summary>A failed attempt that will be tried again at <paramref name="nextAttemptAt"/>. Still pending.</summary>
+    /// <summary>A failed attempt (already counted by <see cref="BeginAttempt"/>) that will be tried again at <paramref name="nextAttemptAt"/>. Still pending.</summary>
     public void RecordRetry(string error, DateTimeOffset nextAttemptAt)
     {
         if (Status != DeliveryStatus.Pending)
@@ -81,7 +93,6 @@ public sealed class Delivery
             return;
         }
 
-        Attempts++;
         LastError = Truncate(error);
         NextAttemptAt = Event.ToStoredPrecision(nextAttemptAt);
     }
@@ -94,7 +105,6 @@ public sealed class Delivery
             return;
         }
 
-        Attempts++;
         Fail(DeliveryFailure.SendFailed, error);
     }
 

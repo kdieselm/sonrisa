@@ -75,9 +75,9 @@ public sealed partial class EmailChannel
             return SendResult.Permanent("The destination address or the sender address is not valid.");
         }
 
+        using var client = new SmtpClient();
         try
         {
-            using var client = new SmtpClient();
             await client.ConnectAsync(options.Host, options.Port,
                 options.UseStartTls ? SecureSocketOptions.StartTlsWhenAvailable : SecureSocketOptions.None, ct);
             if (!string.IsNullOrEmpty(options.Username))
@@ -86,13 +86,25 @@ public sealed partial class EmailChannel
             }
 
             await client.SendAsync(mime, ct);
-            await client.DisconnectAsync(true, CancellationToken.None);
-            return SendResult.Sent();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return Classify(ex);
         }
+
+        // The server has accepted the message. Closing the connection is courtesy: a failure here must not turn a
+        // delivered mail into a retry, which would send it again (S4 review 1).
+        try
+        {
+            using var quit = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            await client.DisconnectAsync(true, quit.Token);
+        }
+        catch (Exception)
+        {
+            // Ignored on purpose; the client is disposed below.
+        }
+
+        return SendResult.Sent();
     }
 
     /// <summary>

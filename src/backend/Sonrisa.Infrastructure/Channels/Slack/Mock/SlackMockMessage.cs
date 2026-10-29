@@ -16,6 +16,9 @@ public sealed class SlackMockMessage
     public const int MaxHookNameLength = 64;
     public const int MaxBodyLength = 16_000;
 
+    /// <summary>The mock keeps only the newest messages, so an anonymous caller cannot fill the database.</summary>
+    public const int MaxStored = 500;
+
     public long Id { get; private set; }
     public string HookName { get; private set; } = string.Empty;
     public string Body { get; private set; } = string.Empty;
@@ -50,8 +53,16 @@ public sealed class SlackMockStore(AppDbContext db, TimeProvider time) : ISlackM
 {
     public async Task AddAsync(string hookName, string body, CancellationToken ct)
     {
-        db.Set<SlackMockMessage>().Add(new SlackMockMessage(hookName, body, time.GetUtcNow()));
+        var message = new SlackMockMessage(hookName, body, time.GetUtcNow());
+        db.Set<SlackMockMessage>().Add(message);
         await db.SaveChangesAsync(ct);
+
+        // Identity IDs only grow, so everything older than the newest MaxStored IDs can go.
+        var cutoff = message.Id - SlackMockMessage.MaxStored;
+        if (cutoff > 0)
+        {
+            await db.Set<SlackMockMessage>().Where(m => m.Id <= cutoff).ExecuteDeleteAsync(ct);
+        }
     }
 
     public async Task<(IReadOnlyList<SlackMockMessageRecord> Items, int Total)> ListAsync(int page, int pageSize,

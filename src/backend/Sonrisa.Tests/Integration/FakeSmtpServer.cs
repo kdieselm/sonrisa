@@ -26,6 +26,9 @@ public sealed class FakeSmtpServer : IAsyncDisposable
     /// <summary>The server's answer to RCPT TO; a 4xx or 5xx refuses the recipient.</summary>
     public string RcptReply { get; set; } = "250 OK";
 
+    /// <summary>After accepting a message the server goes silent: it never answers QUIT.</summary>
+    public bool DropAfterData { get; set; }
+
     public IReadOnlyList<ReceivedMail> Mails
     {
         get
@@ -95,6 +98,11 @@ public sealed class FakeSmtpServer : IAsyncDisposable
                         }
 
                         await writer.WriteLineAsync("250 queued");
+                        if (DropAfterData)
+                        {
+                            await Task.Delay(Timeout.Infinite, _stop.Token);
+                            return;
+                        }
                     }
                     else if (command == "QUIT")
                     {

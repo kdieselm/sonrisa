@@ -384,6 +384,82 @@ public sealed class DeliveryTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Empty(await MockMessagesWithAsync(word));
     }
 
+    // ---- review fixes (S4 review 1, 3, 4) ------------------------------------------------------------------
+
+    [Fact]
+    public async Task An_email_the_server_accepted_is_sent_even_if_it_never_answers_QUIT()
+    {
+        _smtp.DropAfterData = true;
+        var channel = new EmailChannel(new EmailOptions { Host = "127.0.0.1", Port = _smtp.Port });
+        var marker = UserApi.UniqueWord();
+
+        var result = await channel.SendAsync("""{"address":"someone@example.test"}""",
+            new FormattedMessage($"subject {marker}", "<p>hi</p>"), Ct).WaitAsync(TimeSpan.FromSeconds(15), Ct);
+
+        Assert.Equal(SendOutcome.Sent, result.Outcome);
+        Assert.Single(_smtp.Mails, m => m.Data.Contains(marker, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_delete_that_fails_the_row_during_a_send_wins_over_the_workers_outcome()
+    {
+        Start(worker: false);
+        var (_, _, token) = await NewUserAsync();
+        var admin = await _client.LoginAsAdminAsync();
+        var inbox = await _client.CreateDestinationAsync(token, "email");
+        var word = UserApi.UniqueWord();
+        var alert = await _client.CreateAlertAsync(token, "news", new { keywords = new[] { word } }, [inbox.Id]);
+        await _client.SimulateNewsAsync(admin.AccessToken, $"{word} happened");
+        var id = Assert.Single(await _factory.DeliveriesOfAlertAsync(alert.Id)).Id;
+
+        // The worker has read the row ...
+        await using var workerScope = _factory.Services.CreateAsyncScope();
+        var repository = workerScope.ServiceProvider.GetRequiredService<IDeliveryRepository>();
+        var work = (await repository.GetWorkAsync(id, Ct))!;
+
+        // ... the user deletes the alert (a set-based update on the same row) ...
+        await using (var deleteScope = _factory.Services.CreateAsyncScope())
+        {
+            await deleteScope.ServiceProvider.GetRequiredService<IDeliveryRepository>()
+                .FailPendingForAlertAsync(alert.Id, DeliveryFailure.AlertDeleted, "alert deleted", Ct);
+        }
+
+        // ... and the worker's outcome must not overwrite it.
+        work.Delivery.BeginAttempt(DateTimeOffset.UtcNow.AddMinutes(1));
+        work.Delivery.RecordSent(DateTimeOffset.UtcNow);
+        Assert.False(await repository.SaveAsync(Ct));
+
+        var row = Assert.Single(await _factory.DeliveriesOfAlertAsync(alert.Id));
+        Assert.Equal((DeliveryStatus.Failed, DeliveryFailure.AlertDeleted, 0), (row.Status, row.Failure, row.Attempts));
+    }
+
+    [Fact]
+    public async Task The_slack_mock_keeps_only_the_newest_messages()
+    {
+        Start(worker: false);
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<ISlackMockStore>();
+        for (var i = 0; i < SlackMockMessage.MaxStored + 5; i++)
+        {
+            await store.AddAsync("cap", $"message {i}", Ct);
+        }
+
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.True(await db.Set<SlackMockMessage>().CountAsync(Ct) <= SlackMockMessage.MaxStored);
+        Assert.True(await db.Set<SlackMockMessage>().AnyAsync(m => m.Body == $"message {SlackMockMessage.MaxStored + 4}", Ct));
+        Assert.False(await db.Set<SlackMockMessage>().AnyAsync(m => m.Body == "message 0", Ct));
+    }
+
+    [Fact]
+    public async Task The_slack_mock_refuses_a_message_that_is_too_large()
+    {
+        Start(worker: false);
+
+        var response = await _client.PostAsync("/mock/slack/hooks/big", new StringContent(new string('x', 50_000)), Ct);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+    }
+
     // ---- admin delivery log ------------------------------------------------------------------------------------
 
     [Fact]
