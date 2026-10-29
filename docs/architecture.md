@@ -207,7 +207,7 @@ Identity tables (`AspNetUsers`, `AspNetRoles`, …) come from `IdentityDbContext
 | S3b | matching in `EventIngestor`, category rules (disaster with point + radius, D27; news), channel interface + registry with `ValidateConfig` / `MaskConfig` / `DefaultConfig` (email, Slack), destinations and alerts API, catalog, back-fill query, notifications query, admin user detail | destinations, alerts with rule forms, Notifications page, admin user detail | `Destinations`, `Alerts`, `AlertDestinations`, `Deliveries` |
 | S4 | `DeliveryWorker`, category `Describe` + `NotificationContent` (moved from S3b, D27), `Format` + `SendAsync` for email (MailKit) and Slack, Slack mock receiver, seeded demo user | admin delivery log, Slack mock list; statuses on the Notifications page | `SlackMockMessages` |
 | S5 | market category (rule, state, start state), `IObservationStore` (Domain, D30), `MarketMovements` (grid crossing → event), CoinGecko, mock stocks (`ProducesSimulatedEvents`), Finnhub, `GET /api/market/assets` | market rule form, market simulate form, asset list service | `AlertStates` |
-| S6 | — | — | — (guides, the AC11 `grep` in the README, clean-clone run) |
+| S6 | — (tests only: `RegistryBoundaryTests`, `GuidePathTests`) | — | — (guides verified, the AC11 `grep` in the README, `scripts/clean-clone-check.sh`) |
 
 ## 6. Architecture decision records
 

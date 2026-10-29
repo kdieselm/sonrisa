@@ -301,7 +301,8 @@ public sealed class DeliveryTests(PostgresFixture postgres) : IAsyncLifetime
         var alert = await _client.CreateAlertAsync(token, "news", new { keywords = new[] { word } }, [inbox.Id]);
 
         await _client.SimulateNewsAsync(admin.AccessToken, $"{word} happened");
-        var first = await WaitForAsync(alert.Id, r => r.Count == 1 && r[0].Attempts >= 1);
+        // Attempts is saved before the send (write-ahead, S4 review), so wait for the outcome, not for the count.
+        var first = await WaitForAsync(alert.Id, r => r.Count == 1 && r[0].Attempts >= 1 && r[0].LastError is not null);
         Assert.Equal(DeliveryStatus.Pending, first[0].Status);
         Assert.Contains("451", first[0].LastError);
 

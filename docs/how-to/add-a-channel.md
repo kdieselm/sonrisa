@@ -2,7 +2,7 @@
 
 A **notification channel** is a way to deliver a notification: email, Slack, later for example a generic webhook or SMS (spec §2.6, §2.11). The brief asks for a system "flexible enough that we can add more channels later". A channel owns the shape of a destination's config: it validates it, fills in defaults, and decides what of it may leave the API. It also turns the channel-neutral `NotificationContent` into its own message and sends it. Core code never names a channel: it finds one through the registry by key (ADR-2, AC11).
 
-- **Status:** S4. Config, validation, defaults, masking, the destination form, formatting and sending (`Format`, `SendAsync`) are complete.
+- **Status:** S6. Config, validation, defaults, masking, the destination form, formatting and sending (`Format`, `SendAsync`) are complete. Dry-run in S6 (`process/log.md`): a throwaway `console` channel built from this guide alone took **2 new files** (one backend class, one frontend file), **2 registration lines** (one per side) and **1 test update** (the catalog test that lists the channels, see the checklist); backend and frontend built and all other 311 tests passed.
 - **Worked example:** `slack` (the config holds a secret, so it is masked). `email` is the smallest one.
 
 ## What you add
@@ -17,6 +17,8 @@ Use a short, lowercase, stable key, for example `teams`. It is stored in `Destin
 | Infrastructure | `Sonrisa.Infrastructure/Channels/<Name>/<Name>Channel.Send.cs` (partial class; optional split) | `Format(NotificationContent)` and `SendAsync(configJson, message, ct)` |
 | Infrastructure | `Sonrisa.Infrastructure/Configuration/ChannelOptions.cs` (only if needed) | An options class for settings of the channel, e.g. `SlackOptions.MockBaseUrl` |
 | Tests | `Sonrisa.Tests/Unit/Channels/` | Validation, defaults and masking (copy `ChannelConfigTests`); format and status classification (copy `ChannelSendTests`) |
+
+Namespaces you need: `Sonrisa.Application.Abstractions` (`INotificationChannel`, `ChannelContext`, `FormattedMessage`), `Sonrisa.Domain.Categories` (`FieldErrors`, `DataValidationResult`, `NotificationContent`), `Sonrisa.Domain.Entities` (`JsonText.Options`) and `Sonrisa.Domain.ValueObjects` (`SendResult`).
 
 Rules for `<Name>Channel`:
 
@@ -66,7 +68,8 @@ No migration is needed: configs live in the existing `Destinations.Config` jsonb
 ## Checklist
 
 - [ ] The key is new: a duplicate key stops the app at startup (`ChannelRegistry`).
-- [ ] No `switch` or `if` on channel keys outside the registries: `grep -rn '"teams"' src/` shows only the channel class and its registry entry.
+- [ ] No `switch` or `if` on channel keys outside the registries: `RegistryBoundaryTests` finds your `ChannelKey` constant by reflection and fails if the key is named anywhere but its definition (the `grep` in the README does the same by hand).
+- [ ] Add the key to the test that lists the registered channels: `AlertsApiTests.The_catalog_lists_the_registered_categories_and_channels_with_defaults` fails until you do (the dry run found this).
 - [ ] A secret never appears in a response: add your channel's secret to the AC18 test (`AlertsApiTests.No_response_contains_a_full_webhook_url`).
 - [ ] Unit tests for validation, defaults, masking, formatting (escaping, SIMULATED) and status classification pass; no error text contains a secret; `dotnet test` and `npm run build` are green.
 - [ ] Create a destination in the UI, link it to an alert, simulate a matching event; the Notifications page goes from `Pending` to `Sent`, and the message arrives.

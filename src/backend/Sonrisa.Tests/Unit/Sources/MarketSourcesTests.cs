@@ -116,7 +116,7 @@ public sealed class MarketSourcesTests
     }
 
     [Fact]
-    public void The_mock_stocks_are_simulated_stay_in_range_and_eventually_move()
+    public async Task The_mock_stocks_are_simulated_stay_in_range_and_eventually_move()
     {
         var (movements, store, _) = Movements();
         var aapl = new MarketAsset("AAPL", "Apple (AAPL)", MarketAsset.Stock);
@@ -126,7 +126,7 @@ public sealed class MarketSourcesTests
         var emitted = 0;
         for (var i = 0; i < 200; i++)
         {
-            emitted += source.FetchAsync(CancellationToken.None).Result.Count;
+            emitted += (await source.FetchAsync(CancellationToken.None)).Count;
             Assert.InRange(store.Latest("AAPL")!.Value, -25, 25);
         }
 

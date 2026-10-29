@@ -91,6 +91,7 @@ Most categories decide from the event and the rule alone. A category that must r
 ## Checklist
 
 - [ ] The key is new: a duplicate key stops the app at startup (`RegistryTests`).
-- [ ] No `switch` or `if` on category keys outside the registries: `grep -rn '"weather"' src/` shows only the category class and its registry entry.
+- [ ] No `switch` or `if` on category keys outside the registries: `RegistryBoundaryTests` finds your `CategoryKey` constant by reflection and fails if the key is named anywhere but its definition (the `grep` in the README does the same by hand).
+- [ ] Add the key to the two tests that list the registered categories: `AdminEventsTests.Filters_list_the_registered_categories_and_sources` and `AlertsApiTests.The_catalog_lists_the_registered_categories_and_channels_with_defaults` (S5 had to do this for `market`).
 - [ ] Unit tests for the simulate data, the rule validation and the matching boundaries pass; `dotnet test` and `npm run build` are green.
 - [ ] Create an alert of the category, simulate a matching and a non-matching event in the admin view; only the matching one appears on the Notifications page, goes from `Pending` to `Sent`, and arrives with the fields of your `Describe`.

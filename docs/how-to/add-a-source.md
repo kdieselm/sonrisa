@@ -83,5 +83,6 @@ If the source belongs to a new category, add the category first ([`add-a-categor
 
 - [ ] The key is new and not `simulated`, which is reserved for the admin form (`RegistryTests`).
 - [ ] The category key is registered; otherwise the app does not start.
+- [ ] Add the source key to `AdminEventsTests.Filters_list_the_registered_categories_and_sources`, which lists the registered sources. `RegistryBoundaryTests` finds your `SourceKey` constant by reflection and fails if the key is named anywhere but its definition.
 - [ ] Parser tests on the recorded response pass. The tests never call the real feed: the test host sets `Sources:PollingEnabled=false`.
 - [ ] After `docker compose up`, the API log shows `Source <key>: N items, … new`, and the events appear in the admin list.

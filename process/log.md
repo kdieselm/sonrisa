@@ -691,3 +691,56 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: None changes a requirement of the brief. 1 and 2 go into the known limits; a fresh-subagent review of the same diff is the next step before the commit (proposed, not run: this session does not start agents unasked).
 - What I did instead: No code change.
 - How I verified: Read against the code; the points hold as described.
+
+---
+
+## S6 – Hardening
+
+### [2026-10-30 00:10] Check – clean-clone run (AC15) and the script that does it
+- Type: check
+- What the AI proposed / generated: `scripts/clean-clone-check.sh`: clones the committed state into an empty temp directory, copies only `.env.example` to `.env`, runs `docker compose up --build` under its own project name and offset host ports (so a running dev stack is not touched), waits for the web port and the seeded admin login, then runs the end-to-end path of AC1 through nginx (register, email and Slack destination, news alert, admin simulates a matching event) and checks: admin events 200, two `Sent` rows on the Notifications page, exactly one email in Mailpit, the message in the Slack mock list, the polling line in the API log. It always tears down with `down -v`.
+- What was wrong with it / what I weighed: The first run failed before testing anything: the script exported its offset ports, then sourced `.env`, which put the default ports back, so Postgres tried port 5432 of the running dev stack ("port is already allocated"). A gate that fails for its own reason is useful to see once; it shows the script really reaches Compose and reports failure with exit code 1.
+- What I did instead: The ports of the script are saved before `.env` is read and restored after it. Second run on the S5 commit `ed94280`: PASSED (web answers, admin login, `GET /api/admin/events` 200, 2 `Sent`, 1 email, Slack message, sources polled); no `sonrisa-clean` containers are left. The script checks the committed state only; uncommitted work is not part of it.
+- How I verified: the output of both runs; `docker ps -a` shows no leftover container.
+
+### [2026-10-30 00:25] Check – AC11 as a test, with a mutation check
+- Type: check
+- What the AI proposed / generated: `RegistryBoundaryTests`: finds every key by reflection (each `const string` named `CategoryKey`, `ChannelKey`, `SourceKey` or `SimulatedKey` in Domain, Application and Infrastructure), then (a) fails if any backend file outside tests, migrations and build output names a key as a string literal anywhere except on its own `const string … = "…";` definition line, and (b) fails if a frontend `.ts` file compares with or switches on a key. A type that follows the guides is covered without editing the test. The by-hand `grep` is in the README.
+- What was wrong with it / what I weighed: The first listing of key literals in production code (done before writing the rule) showed only the ten definition lines (plus `type="email"` in HTML, which is not a key), so the rule matched the code as it is; no code had to change. A test that has never failed proves nothing.
+- What I did instead: Mutation check. `if (x == "slack") { }` added to `CatalogService` → the backend test fails and names `CatalogService.cs:16: "slack"`; `if (location.pathname === 'market') {}` added to `category-registry.ts` → the frontend test fails and names the line. Both files restored.
+- How I verified: `dotnet test --filter-class "*RegistryBoundaryTests"`: 3 pass; with the two mutations 2 fail.
+
+### [2026-10-30 00:50] Check – dry run: a throwaway channel built from `add-a-channel.md` alone
+- Type: check
+- What the AI proposed / generated: In a `git worktree` of the S5 commit, a `console` channel (writes the message to the console) following only the guide: `Channels/Console/ConsoleChannel.cs`, `channels/console/console-config.ts`, one line in `ChannelRegistration.cs`, one entry in `channel-registry.ts`. The worktree was deleted afterwards (the junction to `node_modules` removed first, 162 entries still there).
+- What was wrong with it / what I weighed: The guide held up: no core file changed, no migration, no switch. Gaps found: (1) the guide did not say which namespaces the channel needs (`SendResult` is in `Sonrisa.Domain.ValueObjects`); (2) `AlertsApiTests.The_catalog_lists_the_registered_categories_and_channels_with_defaults` fails as soon as a channel is registered, because it lists the channels, and the guide's checklist did not mention it. A second test failed too (see the next entry); it had nothing to do with the channel.
+- What I did instead: Added a namespace list and the catalog-test line to `add-a-channel.md`, and the matching "tests that list the registered keys" lines to `add-a-category.md` and `add-a-source.md`. Result for the guide: 2 new files, 2 registration lines (one per side), 1 test update; backend and frontend built; 311 of 312 tests passed unchanged apart from the two named here.
+- How I verified: build output of both sides in the worktree, `dotnet test` there (2 failures: the catalog test, and the flaky one below).
+
+### [2026-10-30 01:00] AI-review – a flaky test found by the dry run (S4 write-ahead)
+- Type: ai-review
+- What the AI proposed / generated: `DeliveryTests.An_email_the_smtp_server_defers_with_451_is_retried_until_it_goes_through` failed in the worktree run and, run alone, also in the main checkout (3 of 3), while it had passed in the full runs of S4 and S5.
+- What was wrong with it / what I weighed: The test waited for `Attempts >= 1` and then asserted that `LastError` contains "451". Since the S4 review finding 2 (the attempt is counted and saved *before* the send), `Attempts` is 1 while the send is still running and `LastError` is still null. The test only passed when the outcome happened to be saved first. A code bug would have been in the worker; here the worker is right and the test was wrong.
+- What I did instead: The wait also requires `LastError` to be set, with a comment why. Run alone 3 of 3 pass.
+- How I verified: three isolated runs pass; the full suite below.
+
+### [2026-10-30 01:10] Check – every path a guide names exists (`GuidePathTests`)
+- Type: check
+- What the AI proposed / generated: A test per guide that takes every backticked token with a file extension and a slash (placeholders such as `<Name>` skipped) and requires that it resolves from the repository root or as the tail of a path under `src/`. It asserts that tokens were found, so it cannot pass by finding nothing.
+- What was wrong with it / what I weighed: It passed on the first run, which says only that the guides were accurate or that the test is blind. 
+- What I did instead: Mutation check: `Sources/Usgs/UsgsSource.cs` changed to `UsgsSourceX.cs` in `add-a-source.md` → the `add-a-source.md` case fails and names the path; restored.
+- How I verified: 3 cases pass; 1 fails with the mutation.
+
+### [2026-10-30 01:20] Check – S6 full run
+- Type: check
+- What the AI proposed / generated: README: seeded accounts, the five-minute reviewer path, the checks table with the AC11 `grep`. Spec AC11 text, plan S6 row and architecture §5 row updated to what S6 built. Guides finalized (status lines, dry-run result).
+- What was wrong with it / what I weighed: The real README `grep` returns exactly the ten definition lines (checked by running it). The CI result of the first GitHub run is still missing: the repository is private and the session cannot read the Actions page; the spec §8 row "Testcontainers on the GitHub runner" stays "unverified" until the user pastes the result.
+- What I did instead: The row is changed after my report (next entry): the CI run of `ed94280` passed.
+- How I verified: `dotnet test`: 318/318 (312 before S6: +3 `RegistryBoundaryTests`, +3 `GuidePathTests`); `npm run build` green.
+
+### [2026-10-30 09:00] Check – CI run on GitHub (step 0 of the S6 plan)
+- Type: check
+- What the AI proposed / generated: Nothing; the session cannot read the private repository's Actions page. I reported the result.
+- What was wrong with it / what I weighed: The spec §8 row "Testcontainers runs PostgreSQL on the GitHub Actions runner" had been unverified since S1.
+- What I did instead: I reported that the CI run for the latest pushed commit (`origin/main` = `ed94280`, S5) finished successfully. The row is now "verified", with the commit named and the source of the report stated. The S6 changes are verified by CI only after they are pushed.
+- How I verified: my report of the Actions run; `git log origin/main` shows `ed94280` as the pushed head.
