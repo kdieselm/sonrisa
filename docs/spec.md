@@ -1,6 +1,6 @@
 # Specification
 
-- **Status:** revised after review (phase 2). The raw AI draft is commit `bf14840`; the diff to this version shows the changes. Review findings and decisions: [`process/log.md`](../process/log.md), entries from 2026-10-29 16:00 (review) and D14–D16. Phase 3 added the Notifications page (D18: §2.12, AC21, cut item 6).
+- **Status:** revised after review (phase 2). The raw AI draft is commit `bf14840`; the diff to this version shows the changes. Review findings and decisions: [`process/log.md`](../process/log.md), entries from 2026-10-29 16:00 (review) and D14–D16. Phase 3 added the Notifications page (D18: §2.12, AC21, cut item 6) and, from the architecture review, alert soft delete, three known limits and four unverified facts (D20).
 - **Tool / model:** Claude Code, Claude Opus 5.5 (session 03); review by a fresh subagent with [`prompts/templates/challenge.md`](../prompts/templates/challenge.md).
 - **Inputs:** [`brief.md`](brief.md), [`brainstorm/03-triage.md`](brainstorm/03-triage.md) (final), [`../process/log.md`](../process/log.md) (D1–D16).
 - **Rule:** built only from triage rows with the final verdict *accept*, plus the logged decisions D14–D16 taken during the spec review. Every statement cites its row (T…) or decision (D…). *Defer* rows appear only in §4 (out of scope). Facts that are not verified appear only in §8.
@@ -93,6 +93,7 @@ Assets: crypto `bitcoin`, `ethereum`, `solana`; stocks `AAPL`, `MSFT`, `NVDA`, `
   The default URL uses the API's internal Compose address, so the worker reaches it from inside the network.
 - **Validation (T69):** each channel validates its config on create and update. Email: address format. Slack: `https://hooks.slack.com/…` or a URL under the configured mock base URL.
 - **Deleting a destination:** soft delete; it is unlinked from alerts, its pending deliveries become `Failed` ("destination deleted"); history stays.
+- **Deleting an alert (D20):** soft delete; it no longer matches, its pending deliveries become `Failed` ("alert deleted"); its rows stay on the Notifications page and in the delivery log.
 - **Message content (T76, T77, T78):** title, category, key value (magnitude / previous → current % move / matched keywords), source, link, "SIMULATED" label if set, why it matched (alert name and rule), a link to the alert page in the app, and one disclaimer line per category ("not an official warning" for disasters, "not financial advice; data may be delayed" for market).
 
 ### 2.7 Delivery (T33, T36, T64, T73)
@@ -131,7 +132,7 @@ Append-only table: time, acting user, action, target type and ID, outcome. Actio
 | Extension point | Backend | Frontend | Guide |
 |---|---|---|---|
 | Notification channel | channel interface (§2.6) + one DI registration | registry entry: channel key → destination config form | `docs/how-to/add-a-channel.md` |
-| Event category | category definition: rule shape, validator, matcher, data shape + one registration | registry entry: category key → rule form and event detail view | `docs/how-to/add-a-category.md` |
+| Event category | category definition: rule shape, validator, matcher, data shape, message content + one registration | registry entry: category key → rule form, simulate form and event detail view | `docs/how-to/add-a-category.md` |
 | Source adapter | source interface (fetch → normalized events) + one registration and config section | none needed unless it adds a category | `docs/how-to/add-a-source.md` |
 
 Adding a type touches only the new files and one registration per side. No `switch` or `if` on channel, category or source type outside the registries (T59, T85). Each guide lists the exact files a new type adds and the one registration line it changes.
@@ -235,6 +236,9 @@ Cutting an item also drops the acceptance criteria that depend on it (named belo
 - **Feed terms of use not reviewed (T24):** notifications carry only title, link and source name, no article text.
 - **Slack:** incoming webhook posts to one channel; no DMs (T63). The automated tests use the mock; a real webhook is exercised only in the optional AC20.
 - **No retention policy** (T74).
+- **Resend after a crash (D20):** a crash between a successful send and the status update resends that one message on restart (at-least-once delivery).
+- **Market crossing during a restart (D20):** the first market poll after a restart has no previous value and emits nothing, so a threshold crossing that happens across a restart is missed.
+- **Refresh token in `sessionStorage` (D20):** injected script (XSS) could read it while the tab is open.
 
 ## 8. Unverified facts (must be checked in the named slice, see `plan.md`)
 
@@ -248,5 +252,9 @@ Cutting an item also drops the acceptance criteria that depend on it (named belo
 | Finnhub free per-minute limit | Unverified (F2) | S5 (real free key) |
 | Finnhub `dp` baseline (previous close?) | Unverified (F9) | S5 (live call vs. `pc`) |
 | Mailpit REST API paths (for an automated AC1) | Unverified (F11) | S4 |
+| `MapIdentityApi` works on a prefixed route group (`/api/auth`) | Unverified | S1 |
+| Controller actions appear in the endpoint data source with their `[Authorize]` metadata (AC3 enumeration) | Unverified | S2 |
+| Testcontainers runs PostgreSQL on the GitHub Actions runner | Unverified | S1 |
+| jsonb mapping of rule, config, state and event data with the Npgsql EF Core provider | Unverified | S3a / S3b |
 | Slack incoming webhook 4xx codes | Unverified (D13) | S4 |
 | Terms of use of BBC, Guardian, CoinGecko, Finnhub | Not reviewed (T24) | Accepted as a known risk |

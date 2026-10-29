@@ -29,7 +29,7 @@ Source of truth: [`docs/brief.md`](docs/brief.md) (the original task, verbatim).
 | Frontend | Angular (latest stable), standalone components |
 | Email (local) | Mailpit container (SMTP + web UI) |
 | Slack | Incoming webhook; local mock receiver endpoint in the API that logs the message; real webhook URL optional via `.env` |
-| Tests | xUnit (matching logic, authorization, logout) |
+| Tests | xUnit (matching logic, authorization, logout); integration tests on PostgreSQL via Testcontainers |
 | CI | GitHub Actions: build + test |
 | Run | `docker compose up` (Postgres, Mailpit, API, frontend) |
 
