@@ -1,5 +1,7 @@
 import { Routes } from '@angular/router';
 import { AdminAuditPage } from './admin/admin-audit.page';
+import { AdminEventsPage } from './admin/admin-events.page';
+import { AdminSimulatePage } from './admin/admin-simulate.page';
 import { AdminUsersPage } from './admin/admin-users.page';
 import { adminGuard, authGuard, guestGuard } from './auth/auth.guards';
 import { AccountPage } from './pages/account.page';
@@ -18,6 +20,18 @@ export const routes: Routes = [
     component: AdminUsersPage,
     canActivate: [authGuard, adminGuard],
     title: 'Users · Admin · Sonrisa',
+  },
+  {
+    path: 'admin/events',
+    component: AdminEventsPage,
+    canActivate: [authGuard, adminGuard],
+    title: 'Events · Admin · Sonrisa',
+  },
+  {
+    path: 'admin/simulate',
+    component: AdminSimulatePage,
+    canActivate: [authGuard, adminGuard],
+    title: 'Simulate event · Admin · Sonrisa',
   },
   {
     path: 'admin/audit',

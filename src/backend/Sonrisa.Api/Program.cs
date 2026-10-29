@@ -12,10 +12,12 @@ builder.Services.AddAuth();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AdminQueryService>();
+builder.Services.AddEvents(builder.Configuration);
 builder.Services.AddControllers();
 
 var app = builder.Build();
 
+app.ValidateEventRegistries();
 await app.MigrateDatabaseAsync();
 await app.SeedAdminAsync();
 

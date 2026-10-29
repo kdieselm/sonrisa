@@ -15,5 +15,8 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
         builder.UseSetting("ConnectionStrings:Default", connectionString);
         builder.UseSetting("Seed:AdminEmail", AdminEmail);
         builder.UseSetting("Seed:AdminPassword", AdminPassword);
+
+        // Never call the real feeds from tests; the poller test switches polling on with fake sources only.
+        builder.UseSetting("Sources:PollingEnabled", "false");
     }
 }

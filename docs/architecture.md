@@ -25,7 +25,7 @@ flowchart LR
     end
 
     usgs[USGS GeoJSON]
-    rss[BBC / Guardian RSS]
+    rss[Guardian RSS<br/>BBC as fallback]
     cg[CoinGecko]
     fh[Finnhub<br/>optional]
     slack[Slack incoming webhook<br/>optional]
@@ -83,7 +83,8 @@ src/backend/
     ValueObjects/            DeliveryStatus, SendResult
   Sonrisa.Infrastructure   everything that talks to the outside
     Persistence/             AppDbContext (Identity), entity configurations, migrations, repositories
-    Sources/                 Usgs/, Rss/, CoinGecko/, Finnhub/, MockStocks/, InMemoryObservationStore
+    Sources/                 Usgs/, Rss/, CoinGecko/, Finnhub/, MockStocks/, InMemoryObservationStore;
+                             SourceHttpClient (one long-lived HttpClient for all sources, D25)
     Channels/                Email/ (MailKit), Slack/ (incl. Mock/: SlackMockMessage entity + configuration)
     Configuration/           options classes for SMTP, source URLs, API keys
   Sonrisa.Tests            xUnit: Unit/ (Domain, Application), Integration/ (Api via WebApplicationFactory
@@ -134,8 +135,9 @@ sequenceDiagram
 ```
 
 - **One transaction per event:** the event row, the alert states and the delivery rows commit together. A crash before commit leaves nothing, so the next poll sees the item as new again and matches it then. Nothing is lost silently and nothing is half-written.
-- **New or existing:** a read inside the transaction decides. Safe because each source is polled by exactly one loop in one process (ADR-1), and simulated events have unique external IDs; the unique index on `(SourceKey, ExternalId)` still rejects a duplicate insert, which then rolls back that event only.
+- **New or existing:** a read inside the transaction decides, by the external ID or any alternate ID the source supplies (USGS `ids`, because a quake's preferred ID can change); the stored external ID stays as first seen, and an ID longer than the column is stored as a SHA-256 hash. Safe because each source is polled by exactly one loop in one process (ADR-1), and simulated events have unique external IDs; the unique index on `(SourceKey, ExternalId)` still rejects a duplicate insert, which then rolls back that event only.
 - **Age limit:** `IEventCategory.MaxAge` (2 h for disaster and news, none for market; spec §2.5); no category check in the ingestor.
+- **Failover (D26):** a source can be a `FailoverSource` (primary + fallback of one category, `Infrastructure/Sources/Resilience`): retries of the primary within a poll, the fallback in the same poll if they all fail, and a `CircuitBreaker` that skips the primary while it keeps failing. News is configured this way (Guardian, then BBC). It is ordinary configuration plus one registration block, and the poller and ingestor do not know about it.
 - Each source runs in its own loop with its own interval and its own try/catch, so one failing source does not stop the others (T26, AC17). The AC17 test registers a throwing fake source through the test host's DI.
 - The admin "simulate event" endpoint calls the same `EventIngestor` (T14). Its category-specific fields come from the category (`IEventCategory` simulated-data type and validator; frontend: the category's simulate form in the registry).
 - **Source selection:** which stock source runs (Finnhub when `FINNHUB_API_KEY` is set, otherwise mock stocks) is decided once in the source registration in `Api/Configuration`, the one place where sources are registered (T85). No other code checks it.
@@ -250,5 +252,24 @@ Identity tables (`AspNetUsers`, `AspNetRoles`, …) come from `IdentityDbContext
 ## 7. Open points for the slices
 
 - **New packages** (rule 4, approval with a version check on NuGet / npm in the slice that first needs them): `Npgsql.EntityFrameworkCore.PostgreSQL`, `Microsoft.AspNetCore.Identity.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Design` (S1, Infrastructure only; Application and Domain stay free of EF Core); `xunit`, `Microsoft.AspNetCore.Mvc.Testing`, `Testcontainers.PostgreSql` (S1, D20); MailKit (approved, D13, S4); Angular (S1).
-- **Unverified framework behavior, checked in the named slice** (also in spec §8): `MapIdentityApi` works on a `/api/auth` group (S1); insert of delivery rows that relies on the unique index inside the event transaction, with EF Core or raw SQL (S3b); jsonb mapping of `Rule`, `Config`, `State` and `Data` with the Npgsql provider (S3a/S3b); Testcontainers on the GitHub Actions runner (S1).
+- **Unverified framework behavior, checked in the named slice** (also in spec §8): `MapIdentityApi` works on a `/api/auth` group (S1); insert of delivery rows that relies on the unique index inside the event transaction, with EF Core or raw SQL (S3b); jsonb mapping of `Rule`, `Config` and `State` with the Npgsql provider (S3b; `Data` verified in S3a: a `string` property with column type `jsonb`); Testcontainers on the GitHub Actions runner (S1).
 - Unverified source and service facts: spec §8.
+
+## 8. Extending the system
+
+The brief asks for a system "flexible enough that we can add more channels later". There are three extension points. Each one is an interface with a string key, a registry that is the only code that maps keys to implementations, and one registration line per side (ADR-2, spec §2.11). Adding a type means adding files; no shared code, `switch` or migration changes (AC11).
+
+| Extension point | Interface | Backend registration | Frontend registration | Guide | Since |
+|---|---|---|---|---|---|
+| Event category | `IEventCategory` (Domain) | `Api/Configuration/SourceRegistration.cs` | `app/categories/category-registry.ts` | [`how-to/add-a-category.md`](how-to/add-a-category.md) | S3a (data, simulate); S3b adds rule, match, describe |
+| Source adapter | `IEventSource` (Application) | `Api/Configuration/SourceRegistration.cs`; a further feed of a known format is configuration only (`Sources:Rss`) | none | [`how-to/add-a-source.md`](how-to/add-a-source.md) | S3a |
+| Notification channel | `INotificationChannel` (Application) | channel registration (S3b) | channel config form registry (S3b) | `how-to/add-a-channel.md` (S3b/S4) | S3b, S4 |
+
+What the core does for every registered type, so a new type gets it for free:
+
+- **Startup checks:** a duplicate key, a source of an unregistered category, or a source using the reserved key `simulated` stops the app at startup (`CategoryRegistry`, `SourceRegistry`).
+- **Storage:** per-type data is opaque jsonb (`Events.Data`; later `Alerts.Rule`, `Destinations.Config`, `AlertStates.State`), written and read only by the owning type.
+- **Ingestion:** polling loop, error isolation, one transaction per item, and insert or update by (source, external ID) (`SourcePoller`, `EventIngestor`).
+- **Admin view:** filters, the event list and the simulate form read the registries (`GET /api/admin/events/filters`) and render the type's own frontend components through `NgComponentOutlet`.
+
+Each guide is written in the slice that builds its extension point, with the real file list of that slice, and is extended by later slices. S6 only finalizes the guides and adds the AC11 `grep` to the README.

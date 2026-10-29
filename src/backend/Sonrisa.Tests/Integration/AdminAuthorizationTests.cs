@@ -36,6 +36,8 @@ public sealed partial class AdminAuthorizationTests(PostgresFixture postgres) : 
         var routes = AdminRoutes().Select(r => r.Path).ToList();
         Assert.Contains("/api/admin/users", routes);
         Assert.Contains("/api/admin/audit", routes);
+        Assert.Contains("/api/admin/events", routes);
+        Assert.Contains("/api/admin/events/simulate", routes);
     }
 
     [Fact]
@@ -76,14 +78,19 @@ public sealed partial class AdminAuthorizationTests(PostgresFixture postgres) : 
     public async Task Every_admin_endpoint_admits_the_seeded_admin()
     {
         // Proves the role claim is in the bearer token (spec §8): without it the admin would get 403 too.
-        // Every admin endpoint is a parameterless GET so far; one with a route parameter may need a real ID here.
+        // A GET must succeed. A write sent without a body must fail validation (400, or 415 without a content
+        // type), which only happens after authorization passed; 401, 403, 404 and 5xx still fail the test.
+        // An endpoint with a route parameter may need a real ID here.
         var tokens = await _client.LoginAsAdminAsync();
 
         var failures = new List<string>();
         foreach (var (method, path) in AdminRoutes())
         {
             var response = await _client.SendAuthorizedAsync(method, path, tokens.AccessToken);
-            if (!response.IsSuccessStatusCode)
+            var admitted = method == HttpMethod.Get
+                ? response.IsSuccessStatusCode
+                : response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.UnsupportedMediaType;
+            if (!admitted)
             {
                 failures.Add($"{method} {path} → {(int)response.StatusCode}");
             }

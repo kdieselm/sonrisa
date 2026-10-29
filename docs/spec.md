@@ -14,7 +14,7 @@ Every row maps a phrase of the brief to how it is built and how it is checked. N
 | "users to be able to…" | User management (D2, T53, T57) | Self-registration, login, own `/logout`; role `Admin` for admins, every other account is a normal user; every alert and destination belongs to one user; users see only their own | AC2, AC3, AC4 |
 | "set up alerts" | Alert management (T80) | Create, list, edit, enable/disable, delete; one rule per alert in the category's native units (§2.2) | AC5 |
 | "get notified when something important happens" | Importance and timeliness (T3, T7, T27, T34, T38, D14, D15) | "Important" = the user's own rule in native units (magnitude, % move, headline keywords) above a source-level floor; real-time within one poll interval; no notifications for events from before the alert was active | AC6, AC7, AC8 |
-| "in the world — like breaking news, market movements, natural disasters" | All three categories from real sources (T14, T15, T17, T20, T22) | Disaster: USGS `4.5_day` GeoJSON. News: BBC World and Guardian World RSS. Market: CoinGecko crypto (keyless), Finnhub stocks if `FINNHUB_API_KEY` is set, else a mock stock source. Plus a labeled simulated injector (admin) | AC9 |
+| "in the world — like breaking news, market movements, natural disasters" | All three categories from real sources (T14, T15, T17, T20, T22) | Disaster: USGS `4.5_day` GeoJSON. News: Guardian World RSS, with BBC World RSS as a fallback behind a circuit breaker (D26). Market: CoinGecko crypto (keyless), Finnhub stocks if `FINNHUB_API_KEY` is set, else a mock stock source. Plus a labeled simulated injector (admin) | AC9 |
 | "Should work for both email and Slack" | Two channels (T63, T65, T67, T68) | Email via SMTP with MailKit (Mailpit locally); Slack incoming webhook (local mock receiver by default, real webhook optional) | AC1, AC10, AC19, AC20 |
 | "flexible enough that we can add more channels later" | Three extension points (D10, T11, T58, T85) | Notification channel, event category, source adapter: each is one backend interface + one registration and one frontend registry entry; "How to add" guide for each | AC11 |
 | "We need an admin view too" | Admin interface (T42, T49, T50, T51) | Seeded admin; read-only view of users and their alerts, events, delivery log, audit log, Slack mock messages; "simulate event" form | AC3, AC12 |
@@ -63,11 +63,13 @@ There is no global importance score (T2 rejected). Each alert has exactly one ca
 
 Every source implements one source-adapter interface and is registered once (T85). A failing source logs the error and does not stop the other sources or delivery (T26).
 
+**News failover (D26):** news is one source, `world-news`. Each poll tries the Guardian up to 3 times (at once, after 2 s, after 5 s); if it still fails, the same poll reads the BBC. After 2 failed polls in a row a circuit breaker skips the Guardian for 15 minutes and only the BBC is read; then one trial poll of the Guardian decides whether to switch back. The event data names the feed (`feedName`). All numbers are configuration (`Sources:RssFailover`).
+
 | Category | Source | Endpoint | Poll interval |
 |---|---|---|---|
 | Disaster | USGS earthquakes | `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson` (F6) | 1 min |
-| News | BBC World RSS | `https://feeds.bbci.co.uk/news/world/rss.xml` (F7) | 5 min |
-| News | Guardian World RSS | `https://www.theguardian.com/world/rss` (F7) | 5 min |
+| News | Guardian World RSS (primary) | `https://www.theguardian.com/world/rss` (F7) | 5 min |
+| News | BBC World RSS (fallback only, D26) | `https://feeds.bbci.co.uk/news/world/rss.xml` (F7) | read only when the Guardian fails |
 | Market | CoinGecko (crypto, keyless; optional Demo key) | `GET /api/v3/simple/price?ids=…&vs_currencies=usd&include_24hr_change=true`, one batched call (F1) | 5 min |
 | Market | Finnhub (stocks, only if `FINNHUB_API_KEY` is set) | `/quote` per symbol, `dp` field (F9) | 5 min |
 | Market | Mock stocks (if no Finnhub key) | generated moves, `isSimulated = true` | 1 min |
@@ -135,7 +137,7 @@ Append-only table: time, acting user, action, target type and ID, outcome. Actio
 | Event category | category definition: rule shape, validator, matcher, data shape, message content + one registration | registry entry: category key → rule form, simulate form and event detail view | `docs/how-to/add-a-category.md` |
 | Source adapter | source interface (fetch → normalized events) + one registration and config section | none needed unless it adds a category | `docs/how-to/add-a-source.md` |
 
-Adding a type touches only the new files and one registration per side. No `switch` or `if` on channel, category or source type outside the registries (T59, T85). Each guide lists the exact files a new type adds and the one registration line it changes.
+Adding a type touches only the new files and one registration per side. No `switch` or `if` on channel, category or source type outside the registries (T59, T85). Each guide lists the exact files a new type adds and the one registration line it changes. Each guide is written in the slice that builds its extension point and extended by later slices, not left to S6 (D24); architecture §8 summarizes the three.
 
 ### 2.12 Notifications page (D18, T81)
 
@@ -149,7 +151,7 @@ Adding a type touches only the new files and one registration per side. No `swit
 - Register, login, logout (own `/logout`, 10-minute access token)
 - Destinations: email and Slack, with validation; webhook URLs masked
 - Alert CRUD with enable/disable; per-category rules (§2.2); market re-arm and steps (§2.4); one or more destinations per alert
-- Ingestion: USGS, BBC and Guardian RSS, CoinGecko, Finnhub (optional) or mock stocks, simulated injector
+- Ingestion: USGS, Guardian RSS (BBC as fallback, D26), CoinGecko, Finnhub (optional) or mock stocks, simulated injector
 - Matching at ingestion; no back-fill notifications; in-app list of up to 3 recent matches (disaster, news)
 - Delivery worker: email (MailKit → Mailpit), Slack (mock or real webhook), max 3 attempts, unique delivery index
 - Admin view: users and alerts, events, delivery log, Slack mock messages, audit log, simulate event
@@ -229,7 +231,7 @@ Cutting an item also drops the acceptance criteria that depend on it (named belo
 - **Logout window:** an access token issued before logout stays valid for up to 10 minutes (T57).
 - **Scale:** matching loops over all enabled alerts of a category per event; fine for a demo, not for large numbers of alerts (T71).
 - **Region:** disaster place filter is a text match on USGS `place`, not geographic (T75); no region filter for news and market.
-- **News noise:** a common keyword (for example a country name) can still produce many notifications; two feeds and no cross-source dedup (T32) mean the same story can notify twice. Throttling and digests are out of scope (T40).
+- **News noise:** a common keyword (for example a country name) can still produce many notifications; only one feed is read at a time (D26), but there is no cross-source dedup (T32), so right after a switch between the Guardian and the BBC the same story can notify twice. Throttling and digests are out of scope (T40).
 - **Disaster revisions:** a revised magnitude is not matched again (T9), so an upgrade across an alert's threshold does not notify.
 - **Market baseline:** CoinGecko's change is a rolling 24 h value; Finnhub's `dp` baseline is unverified (§8). A "move" is the provider's number, not our own calculation. Grid crossings between two polls are seen only at poll time.
 - **Unconfirmed email addresses:** email destinations accept any address, and email confirmation is out of scope, so a user could direct notifications to someone else's inbox.
@@ -256,6 +258,6 @@ Cutting an item also drops the acceptance criteria that depend on it (named belo
 | `MapIdentityApi` works on a prefixed route group (`/api/auth`) | Verified in source (XML doc recommends `MapGroup`, log 15:56); runtime check by the AC2 tests, not yet run (no Docker) | S1 |
 | Controller actions appear in the endpoint data source (AC3 enumeration) | Verified: the AC3 test finds `/api/admin/users` and `/api/admin/audit` there (S2) | S2 |
 | Testcontainers runs PostgreSQL on the GitHub Actions runner | Unverified (workflow written; needs a GitHub remote) | S1 / first push |
-| jsonb mapping of rule, config, state and event data with the Npgsql EF Core provider | Unverified | S3a / S3b |
+| jsonb mapping of rule, config, state and event data with the Npgsql EF Core provider | Event data verified in S3a: a `string` property with `HasColumnType("jsonb")` creates a `jsonb` column (migration `AddEvents`); `pg_typeof` and `Data->>'magnitude'` work on stored rows (integration test). Rule, config and state: S3b | S3a / S3b |
 | Slack incoming webhook 4xx codes | Unverified (D13) | S4 |
 | Terms of use of BBC, Guardian, CoinGecko, Finnhub | Not reviewed (T24) | Accepted as a known risk |

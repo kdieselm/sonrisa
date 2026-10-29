@@ -29,7 +29,40 @@ export interface PagedResult<T> {
   total: number;
 }
 
-/** Read-only admin API (spec §2.9). */
+/** Mirrors `Sonrisa.Contracts.Dtos.Events.AdminEventDto`. `data` has the category's own shape. */
+export interface AdminEvent {
+  id: number;
+  categoryKey: string;
+  categoryName: string;
+  sourceKey: string;
+  sourceName: string;
+  externalId: string;
+  title: string;
+  summary: string | null;
+  url: string | null;
+  publishedAt: string;
+  firstSeenAt: string;
+  updatedAt: string;
+  isSimulated: boolean;
+  data: unknown;
+}
+
+/** Mirrors `Sonrisa.Contracts.Dtos.Events.EventFiltersDto`. */
+export interface EventFilters {
+  categories: { key: string; name: string }[];
+  sources: { key: string; name: string; categoryKey: string | null }[];
+}
+
+/** Mirrors `Sonrisa.Contracts.Dtos.Events.SimulateEventRequest`. */
+export interface SimulateEventRequest {
+  categoryKey: string;
+  title: string;
+  summary: string | null;
+  url: string | null;
+  data: Record<string, unknown>;
+}
+
+/** Admin API (spec §2.9): read-only lists, plus the "simulate event" form. */
 @Injectable({ providedIn: 'root' })
 export class AdminService {
   private readonly http = inject(HttpClient);
@@ -42,5 +75,24 @@ export class AdminService {
   audit(page: number, pageSize: number): Observable<PagedResult<AuditEntry>> {
     const params = new HttpParams().set('page', page).set('pageSize', pageSize);
     return this.http.get<PagedResult<AuditEntry>>('/api/admin/audit', { params });
+  }
+
+  events(page: number, pageSize: number, category: string, source: string): Observable<PagedResult<AdminEvent>> {
+    let params = new HttpParams().set('page', page).set('pageSize', pageSize);
+    if (category) {
+      params = params.set('category', category);
+    }
+    if (source) {
+      params = params.set('source', source);
+    }
+    return this.http.get<PagedResult<AdminEvent>>('/api/admin/events', { params });
+  }
+
+  eventFilters(): Observable<EventFilters> {
+    return this.http.get<EventFilters>('/api/admin/events/filters');
+  }
+
+  simulateEvent(request: SimulateEventRequest): Observable<AdminEvent> {
+    return this.http.post<AdminEvent>('/api/admin/events/simulate', request);
   }
 }
