@@ -230,3 +230,41 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: Not yet reviewed. The draft marks with ⚑ every value or rule the triage left open (one category per alert, market direction, keyword semantics, 1 % market floor, poll intervals, assets, 2 h age limit, market re-matching per crossing per UTC day, retry delays, 404 vs 403 for other users' IDs, unused Identity endpoints, cut-list positions of audit log / Finnhub / in-app back-fill). It also deviates from T33: the delivery key is `(alert, event, destination)`, not `(alert, event, channel)`, because T67 allows several destinations per channel.
 - What I did instead: Committed raw so the review diff shows every change.
 - How I verified: Next entries (challenge review, coverage check).
+
+### [2026-10-29 16:00] AI-review – challenge review of the raw spec (fresh subagent) + coverage check
+- Type: ai-review
+- What the AI proposed / generated: Raw spec `bf14840`, reviewed with [`prompts/templates/challenge.md`](../prompts/templates/challenge.md) by a subagent with no session history (plus checks for triage contradictions, ⚑ consistency and AC testability). Separately, a script cross-checked T-row citations in the spec against the triage verdicts.
+- What was wrong with it / what I weighed: Main findings (verified by me where they are factual):
+  1. **Market model is self-contradictory** (§2.3, §2.5, AC8): one event per asset × direction × UTC day + "first seen after the alert was created" + 2 h age limit means an alert created after the day's first ≥ 1 % move stays silent all day, and AC8's second clause cannot pass. The UTC day also splits a rolling 24 h move at midnight.
+  2. **News importance reduces to a topic filter** for common keywords (two feeds, no cross-source dedup, no throttling): close to the T1 reading that was rejected.
+  3. **Hooks into `MapIdentityApi` endpoints are assumed:** "role `User` on register" and audit entries for register/login need code inside framework endpoints; the spec does not say how.
+  4. **Cut item 8 ("all categories simulated, still inside the brief") contradicts T13** ("in the world"). Verified: the wording comes from the original spec skeleton (`b61bb94`), i.e. it was mine, not this draft's.
+  5. Real Slack is never exercised; every AC uses the mock.
+  6. ACs not testable as written: AC8 passes with zero deliveries, AC9 depends on the market, AC11 has no procedure, AC3 has no endpoint list, AC4 does not fix the status code, AC6 has no boundary cases, AC2 does not check the 10-minute lifetime; T9/T31/T26/T70/T76/T78 verifications have no AC.
+  7. Cutting the audit log or the back-fill list orphans AC12/AC14; cut item 7 conflicts with AC15.
+  8. Unstated: market "published time", alert edit/re-enable baseline, destination deletion, mock route collision (`/mock/slack/{name}` vs `/fail`), `Retry-After` > 60 s, revised disaster 4.6 → 6.0 never notifying, unconfirmed email addresses as an abuse vector. Missing from §8: role claim in the bearer token, the Identity endpoint hook, unused Identity endpoints' behavior, USGS publication delay vs the 2 h window.
+  9. Log 14:01 still lists T50 as rejected; D12 later accepted it. Verified (line in the 14:01 entry).
+  - Coverage check: all 12 defer rows appear only as out of scope or limits; rejected rows are cited only as rejected or as limits (T2, T9, T32, T59, T83). Six accept rows are not cited (T11, T21, T23, T37, T68, T82); their content is present, but T68 (per-channel formatting) is thin for Slack.
+- What I did instead: Decisions on 1, 2, 4, 5 and the T33 deviation go to the user (next entry); the rest is fixed in the revision. The 14:01 entry is left as written (the log is append-only); this entry records that D12 supersedes its T50 item.
+- How I verified: `grep` of the log and of the skeleton commit for findings 4 and 9; the coverage script compared the triage verdict column with T-IDs cited in `docs/spec.md`.
+
+### [2026-10-29 16:20] D14 – Market alerts: re-arm with hysteresis and optional steps
+- Type: course-correction
+- What the AI proposed / generated: Raw spec §2.3: one market event per asset × direction × UTC day, re-matched on each poll; the delivery index stops repeats. The review showed it contradicts the first-seen and 2 h rules (finding 1).
+- What was wrong with it / what I weighed: Reading the draft, it meant at most one notification per day per asset and direction. Not acceptable: a market that moves, recovers and moves again is news twice. I first asked for polling at least every 5 minutes; the AI pointed out that polling is already 5 minutes and the cap comes from the dedup rule, then listed options: daily cap, re-arm with hysteresis, step escalation, cooldown, own short-window calculation (would override T22).
+- What I did instead: Re-arm + steps. The market source emits an event when the provider's change crosses a 0.5-point grid line between two polls. Each alert fires on crossing its threshold, re-arms when the change falls below threshold − 1 point, and with an optional `stepPercent` notifies again at each further step. A new or re-enabled alert starts disarmed if the move is already past its threshold (keeps T34). No daily key; T22 (no own price history) stays.
+- How I verified: Worked example in spec §2.4 (threshold 5, step 2.5: exactly 3 notifications); AC8 tests that sequence.
+
+### [2026-10-29 16:21] D15 – News keywords match the headline only
+- Type: decision
+- What the AI proposed / generated: Raw spec: keyword in title or summary. Review finding 2: common keywords flood the user, close to the rejected T1 reading.
+- What was wrong with it / what I weighed: Headline-only, whole-word matching cuts most noise without throttling (T40 stays deferred). D9 (news = keywords) is unchanged.
+- What I did instead: Headline only, word boundaries, case-insensitive; the remaining flood risk is a known limit in §7.
+- How I verified: AC6 boundary cases (whole word, not in summary only).
+
+### [2026-10-29 16:22] D16 – Other spec review decisions
+- Type: decision
+- What the AI proposed / generated: Raw spec cut item 8 ("all categories simulated, still inside the brief"), no real-Slack check, delivery key per destination instead of T33's "channel".
+- What was wrong with it / what I weighed: Item 8 came from my own skeleton and contradicts T13 ("in the world"). I want to keep it as a last resort, but not disguised as inside the brief. Real Slack is never exercised by any AC. The destination key is needed because T67 allows several destinations per channel.
+- What I did instead: Item 8 kept, reworded: only with my explicit approval, recorded as a weakened requirement. New optional manual AC20 (real webhook from my workspace, screenshot). Delivery unique key `(alert, event, destination)`. The other review findings were fixed in the revision without a separate decision: normal users have no role (no hook in `/register` needed), audit hooks via an endpoint filter (unverified, fallback own endpoints), unused Identity endpoints return 404, `activeSince` for edit/re-enable, soft-deleted destinations, mock routes `/hooks/{name}`, `/fail`, `/reject`, `Retry-After` cap 5 min, sharpened ACs (AC2–AC11) and new AC16–AC19 for T9/T31, T26, T70, T76/T78, cut items name the ACs they drop, §7 and §8 extended.
+- How I verified: Diff `bf14840..` on `docs/spec.md`; the coverage script re-run on the revised spec.
