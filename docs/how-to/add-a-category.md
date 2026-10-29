@@ -2,8 +2,8 @@
 
 An **event category** is a kind of world event: disaster, news, later market (spec §2.2, §2.11). A category owns the shape of its event data, its simulate form, its alert rule and matching, and its message content. Core code never names a category: it finds one through the registry by key (ADR-2, AC11).
 
-- **Status:** S4. Data, simulate, list, rule, matching, the recent-matches flag and `Describe` (message content) below are complete. S5 adds stateful categories (market) and extends this guide.
-- **Worked example:** `disaster` (USGS earthquakes; rule with magnitude, place text and an optional point + radius). `news` is the smallest one.
+- **Status:** S5. Data, simulate, list, rule, matching, the recent-matches flag, `Describe` (message content) and the stateful variant (last section) are complete. S6 checks every path and registration named here against the repository.
+- **Worked examples:** `disaster` (USGS earthquakes; rule with magnitude, place text and an optional point + radius). `news` is the smallest one. `market` is the stateful one (re-arm, steps, start state).
 
 ## What you add
 
@@ -71,6 +71,22 @@ No migration is needed: event data lives in `Events.Data` and rules in `Alerts.R
 - The alert page lists recent matches through your `Matches`, or shows your reason if `SupportsBackfill` is false.
 - The admin list, the alert list and the admin user view render your summary components. If the frontend entry is missing, the category is left out of the forms instead of failing.
 - A source can now name the category (see [`add-a-source.md`](add-a-source.md)). A source of an unregistered category stops the app at startup.
+
+## A category with state (market)
+
+Most categories decide from the event and the rule alone. A category that must remember something per alert (market: armed or not, last notified level) adds state. Nothing else changes; the registration is the same.
+
+| Layer | File(s) to add | What it holds |
+|---|---|---|
+| Domain | `Sonrisa.Domain/Categories/<Name>/<Name>State.cs` | The record stored as the alert's state (jsonb in `AlertStates.State`), e.g. `MarketState(Up, Down)` |
+| Domain | `<Name>Category.cs` (the same file) | Two more members: `Evaluate(Event, ruleJson, stateJson)` returns a `MatchOutcome(matched, newStateJson)`, and `InitialState(ruleJson, IObservationStore)` returns the state a new alert starts with |
+
+- **`Evaluate`:** pure. Read the state (null = none yet), decide, and return the new state; return `null` as the new state when nothing changed, so no row is written. The ingestor calls it for every event of the category and every enabled alert that was active before the event, and saves a returned state in the **same transaction** as the event and the deliveries. Return a new state even when `matched` is false (a re-arm). The default implementation is `Matches` with no state, so categories without state write neither method.
+- **`InitialState`:** called by `AlertService` when the alert becomes active again (create, re-enable, rule change). Use `IObservationStore.Latest(key)` (the last value a source recorded, `null` before the first poll) so an alert never fires for a move that was already under way (spec §2.4, T34). Return `null` if the category keeps no state.
+- **`Matches`** stays required. For a stateful category it is the stateless approximation (used by nothing in the app when `SupportsBackfill` is false); keep it simple and tested.
+- **Test pattern:** feed a sequence of values through `InitialState` and `Evaluate` and assert exactly which values notify (`MarketCategoryTests.The_documented_sequence_notifies_exactly_three_times_at_the_documented_points`). Include the start past the threshold, the exact threshold, and hovering at the threshold.
+- **Category-owned data for the forms:** if the rule form needs a list from configuration (market: the assets), add one controller file for it (`Sonrisa.Api/Controllers/MarketAssetsController.cs`) and a small service on the frontend (`categories/market/market-assets.ts`). The core catalog and the admin filters are not changed. The catalog of configured assets is registered with the category (`SourceRegistration.cs`: `MarketAssetCatalog`, one extra line).
+- **Sources of a stateful category** record what they observe in `IObservationStore`; see [`add-a-source.md`](add-a-source.md), "A source that observes values".
 
 ## Checklist
 

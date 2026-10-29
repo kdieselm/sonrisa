@@ -19,6 +19,9 @@ public interface IEventSource
 
     TimeSpan Interval { get; }
 
+    /// <summary>True for a source that generates its data (spec §2.5 mock stocks): its events are marked simulated.</summary>
+    bool ProducesSimulatedEvents => false;
+
     Task<IReadOnlyList<IncomingEvent>> FetchAsync(CancellationToken ct);
 }
 

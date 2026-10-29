@@ -36,6 +36,10 @@ services:
       Channels__Email__Host: ${SMTP_HOST}
       Channels__Email__Port: ${SMTP_PORT}
       Channels__Email__From: ${SMTP_FROM}
+      # Market sources (optional keys). Without a Finnhub key the stocks come from the mock source; CoinGecko works
+      # without a key.
+      Sources__Market__Finnhub__ApiKey: ${FINNHUB_API_KEY:-}
+      Sources__Market__CoinGecko__ApiKey: ${COINGECKO_API_KEY:-}
       Channels__Slack__MockEnabled: "true"
       # Alert links in messages point at the web app as the browser reaches it.
       Delivery__PublicBaseUrl: "http://localhost:${WEB_PORT}"

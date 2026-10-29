@@ -2,8 +2,8 @@
 
 A **source adapter** fetches one external feed and turns its items into normalized events of one category (spec §2.5, §2.11). The poller runs every source in its own loop on its own interval. A source that throws is logged and polled again on the next interval; it never stops the other sources (T26, AC17).
 
-- **Status:** S3a.
-- **Worked examples:** `Sonrisa.Infrastructure/Sources/Usgs/UsgsSource.cs` (JSON) and `Sources/Rss/RssSource.cs` (XML, one class configured for several feeds).
+- **Status:** S5 (the observation-source section was added with the market sources). S6 checks every path and registration named here against the repository.
+- **Worked examples:** `Sonrisa.Infrastructure/Sources/Usgs/UsgsSource.cs` (JSON) and `Sources/Rss/RssSource.cs` (XML, one class configured for several feeds); `Sources/Market/CoinGeckoSource.cs` (a value per asset).
 
 ## Two cases
 
@@ -47,6 +47,17 @@ Rules for the adapter:
 - **One bad item is not fatal:** skip items without an ID or title, or with wrong types, inside `Parse` (see the per-feature guard in `UsgsSource`). A response that is not the expected format at all should throw, so the poller logs it. An item the database rejects is logged and skipped by the poller; the other items of the poll are still stored.
 - **HTTP:** use the shared `SourceHttpClient` (timeout, response-size limit, user agent). Do not create your own `HttpClient`.
 - **XML:** keep `DtdProcessing.Prohibit` as in `RssSource`.
+
+## A source that observes values (market)
+
+Some sources do not return events but a **current value** per asset (CoinGecko, Finnhub, the mock). Spec §2.4 turns two consecutive values into an event only when a 0.5-point grid line was crossed. That part is shared, so such a source only has to read its values:
+
+1. Parse the response into `AssetReading(MarketAsset, ChangePercent)` items (a static `Parse` that the tests call on a recorded response; `CoinGeckoSource.Parse`, `FinnhubSource.ParseQuote`).
+2. Return `movements.Record(readings, baseline, url)` from `FetchAsync`. `MarketMovements` (`Infrastructure/Sources/Market/`) stores each value in `IObservationStore`, emits nothing on the first poll, and builds the `IncomingEvent` (external ID = asset + poll time, title, data) on a crossing. `baseline` says what the percentage is relative to and goes into the message.
+3. A source that generates its data (the mock) sets `ProducesSimulatedEvents => true`, so its events carry the "simulated" label.
+4. A secret goes in a request **header** (`X-Finnhub-Token`, `x-cg-demo-api-key`), never in the URL, so it cannot reach a log or an exception message.
+
+Options live in `Sources:Market` (`MarketOptions` in `SourceOptions.cs`); the assets are a list in `appsettings.json`, with `Kind` (`crypto` or `stock`) deciding which source reads them. The registration is the same kind of block as below, with the assets of the right kind (`SourceRegistration.cs`: CoinGecko, Finnhub if `Sources:Market:Finnhub:ApiKey` is set, otherwise the mock). A key from the environment is passed in `docker-compose.yml` and listed, empty, in `.env.example`.
 
 ## The one registration
 

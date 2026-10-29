@@ -112,8 +112,8 @@ public sealed class AdminEventsTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var filters = (await response.Content.ReadFromJsonAsync<EventFiltersDto>(Ct))!;
 
-        Assert.Equal(["disaster", "news"], filters.Categories.Select(c => c.Key).Order());
-        Assert.Equal(["simulated", "usgs", "world-news"], filters.Sources.Select(s => s.Key).Order());
+        Assert.Equal(["disaster", "market", "news"], filters.Categories.Select(c => c.Key).Order());
+        Assert.Equal(["coingecko", "mock-stocks", "simulated", "usgs", "world-news"], filters.Sources.Select(s => s.Key).Order());
     }
 
     [Fact]

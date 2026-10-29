@@ -10,7 +10,7 @@ public sealed class AlertRepository(AppDbContext db) : IAlertRepository
     public void Add(Alert alert) => db.Set<Alert>().Add(alert);
 
     public Task<Alert?> GetForUserAsync(long id, string userId, CancellationToken ct) =>
-        Owned(userId).Include(a => a.Destinations).FirstOrDefaultAsync(a => a.Id == id, ct);
+        Owned(userId).Include(a => a.Destinations).Include(a => a.State).FirstOrDefaultAsync(a => a.Id == id, ct);
 
     public async Task<(IReadOnlyList<Alert> Items, int Total)> ListForUserAsync(string userId, int page,
         int pageSize, CancellationToken ct)
@@ -47,6 +47,7 @@ public sealed class AlertRepository(AppDbContext db) : IAlertRepository
             {
                 a.Id,
                 a.Rule,
+                State = a.State == null ? null : a.State.State,
                 DestinationIds = a.Destinations
                     .Where(link => db.Set<Destination>()
                         .Any(d => d.Id == link.DestinationId && d.DeletedAt == null))
@@ -54,7 +55,21 @@ public sealed class AlertRepository(AppDbContext db) : IAlertRepository
                     .ToList(),
             })
             .ToListAsync(ct);
-        return rows.Select(r => new MatchCandidate(r.Id, r.Rule, r.DestinationIds.Order().ToList())).ToList();
+        return rows.Select(r => new MatchCandidate(r.Id, r.Rule, r.DestinationIds.Order().ToList(), r.State))
+            .ToList();
+    }
+
+    public async Task SaveStateAsync(long alertId, string stateJson, DateTimeOffset now, CancellationToken ct)
+    {
+        var state = await db.Set<AlertState>().FindAsync([alertId], ct);
+        if (state is null)
+        {
+            db.Set<AlertState>().Add(new AlertState(alertId, stateJson, now));
+        }
+        else
+        {
+            state.Set(stateJson, now);
+        }
     }
 
     /// <summary>The one starting point of every user-facing query: the caller's not deleted alerts.</summary>

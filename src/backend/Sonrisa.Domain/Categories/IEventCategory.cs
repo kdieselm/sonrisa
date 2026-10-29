@@ -47,6 +47,20 @@ public interface IEventCategory
     bool Matches(Event item, string ruleJson);
 
     /// <summary>
+    /// Matching with state (spec §2.4, ADR-5). The ingestor calls this, not <see cref="Matches"/>. A category without
+    /// state keeps the default, which is <see cref="Matches"/> and no state. A stateful category (market) reads the
+    /// alert's stored state (null = none) and returns the new one; the ingestor saves it in the event's transaction.
+    /// Pure: no clock, no I/O.
+    /// </summary>
+    MatchOutcome Evaluate(Event item, string ruleJson, string? stateJson) => new(Matches(item, ruleJson));
+
+    /// <summary>
+    /// The state a new alert starts with, when it becomes active (create, re-enable, rule change; spec §2.5). Null =
+    /// no state, which is the default.
+    /// </summary>
+    string? InitialState(string ruleJson, IObservationStore observations) => null;
+
+    /// <summary>
     /// The channel-neutral content of the notification for <paramref name="item"/> matched by <paramref name="alert"/>
     /// (spec §2.6, ADR-2). Pure. <see cref="NotificationContent.SourceName"/> holds the source key; the delivery
     /// processor replaces it with the display name and fills in the absolute alert link.

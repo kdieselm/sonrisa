@@ -259,6 +259,14 @@ public sealed class EventIngestorTests
                 .Select(c => c.Candidate)
                 .ToList());
 
+        public Dictionary<long, string> States { get; } = [];
+
+        public Task SaveStateAsync(long alertId, string stateJson, DateTimeOffset now, CancellationToken ct)
+        {
+            States[alertId] = stateJson;
+            return Task.CompletedTask;
+        }
+
         public void Add(Delivery delivery) => _pendingDeliveries.Add(delivery);
 
         public Task<IReadOnlyList<long>> ListDueIdsAsync(DateTimeOffset now, int limit, CancellationToken ct) =>

@@ -217,6 +217,23 @@ namespace Sonrisa.Infrastructure.Persistence.Migrations
                     b.ToTable("AlertDestinations", (string)null);
                 });
 
+            modelBuilder.Entity("Sonrisa.Domain.Entities.AlertState", b =>
+                {
+                    b.Property<long>("AlertId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("AlertId");
+
+                    b.ToTable("AlertStates", (string)null);
+                });
+
             modelBuilder.Entity("Sonrisa.Domain.Entities.AuditEntry", b =>
                 {
                     b.Property<long>("Id")
@@ -592,6 +609,15 @@ namespace Sonrisa.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Sonrisa.Domain.Entities.AlertState", b =>
+                {
+                    b.HasOne("Sonrisa.Domain.Entities.Alert", null)
+                        .WithOne("State")
+                        .HasForeignKey("Sonrisa.Domain.Entities.AlertState", "AlertId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Sonrisa.Domain.Entities.Delivery", b =>
                 {
                     b.HasOne("Sonrisa.Domain.Entities.Alert", null)
@@ -627,6 +653,8 @@ namespace Sonrisa.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Sonrisa.Domain.Entities.Alert", b =>
                 {
                     b.Navigation("Destinations");
+
+                    b.Navigation("State");
                 });
 #pragma warning restore 612, 618
         }

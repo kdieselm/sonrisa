@@ -111,6 +111,22 @@ public sealed class EventIngestor(
         }
     }
 
+    /// <summary>
+    /// Like <see cref="TryMatch"/>, with the alert's state (spec §2.4): null if the category cannot read the rule,
+    /// the event or the state.
+    /// </summary>
+    public static MatchOutcome? TryEvaluate(IEventCategory category, Event item, string rule, string? state)
+    {
+        try
+        {
+            return category.Evaluate(item, rule, state);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
     private async Task<(int Count, IReadOnlyList<long> Failed)> MatchAsync(Event created, DateTimeOffset now,
         CancellationToken ct)
     {
@@ -124,19 +140,27 @@ public sealed class EventIngestor(
         var failed = new List<long>();
         foreach (var candidate in await alerts.ListMatchCandidatesAsync(category.Key, created.FirstSeenAt, ct))
         {
-            switch (TryMatch(category, created, candidate.Rule))
+            if (TryEvaluate(category, created, candidate.Rule, candidate.StateJson) is not { } outcome)
             {
-                case null:
-                    failed.Add(candidate.AlertId);
-                    break;
-                case true:
-                    foreach (var destinationId in candidate.DestinationIds)
-                    {
-                        deliveries.Add(new Delivery(candidate.AlertId, created, destinationId, now));
-                        count++;
-                    }
+                failed.Add(candidate.AlertId);
+                continue;
+            }
 
-                    break;
+            // The new state is saved in this transaction, with the event and the deliveries (ADR-3, ADR-5).
+            if (outcome.NewStateJson is { } newState)
+            {
+                await alerts.SaveStateAsync(candidate.AlertId, newState, now, ct);
+            }
+
+            if (!outcome.Matched)
+            {
+                continue;
+            }
+
+            foreach (var destinationId in candidate.DestinationIds)
+            {
+                deliveries.Add(new Delivery(candidate.AlertId, created, destinationId, now));
+                count++;
             }
         }
 

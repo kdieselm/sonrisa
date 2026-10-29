@@ -22,6 +22,7 @@ public sealed class AlertService(
     ITransactionRunner transactions,
     CategoryRegistry categories,
     SourceRegistry sources,
+    IObservationStore observations,
     TimeProvider time)
 {
     /// <summary>Keeps every per-user list within one page (no unbounded reads).</summary>
@@ -74,6 +75,7 @@ public sealed class AlertService(
         }
 
         var created = new Alert(userId, name, category.Key, rule, destinationIds, time.GetUtcNow());
+        created.SetState(category.InitialState(rule, observations), time.GetUtcNow());
         await transactions.RunAsync(_ =>
         {
             alerts.Add(created);
@@ -117,9 +119,16 @@ public sealed class AlertService(
 
         await transactions.RunAsync(_ =>
         {
+            var activeSince = existing.ActiveSince;
             existing.Rename(name);
             existing.ChangeRule(rule, time.GetUtcNow());
             existing.SetDestinations(destinationIds);
+            if (existing.ActiveSince != activeSince)
+            {
+                // The alert is active again from now (spec §2.5): a stateful category starts over (spec §2.4).
+                existing.SetState(category!.InitialState(rule, observations), time.GetUtcNow());
+            }
+
             return Task.FromResult(0);
         }, ct);
         return ServiceResult<AlertDto>.Ok(existing.ToDto(categories));
@@ -138,7 +147,13 @@ public sealed class AlertService(
         {
             if (enabled)
             {
+                var activeSince = existing.ActiveSince;
                 existing.Enable(time.GetUtcNow());
+                if (existing.ActiveSince != activeSince
+                    && categories.Find(existing.CategoryKey) is { } category)
+                {
+                    existing.SetState(category.InitialState(existing.Rule, observations), time.GetUtcNow());
+                }
             }
             else
             {

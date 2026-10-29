@@ -4,9 +4,11 @@ using Sonrisa.Application.Registries;
 using Sonrisa.Application.Services;
 using Sonrisa.Domain.Categories;
 using Sonrisa.Domain.Categories.Disaster;
+using Sonrisa.Domain.Categories.Market;
 using Sonrisa.Domain.Categories.News;
 using Sonrisa.Infrastructure.Configuration;
 using Sonrisa.Infrastructure.Sources;
+using Sonrisa.Infrastructure.Sources.Market;
 using Sonrisa.Infrastructure.Sources.Resilience;
 using Sonrisa.Infrastructure.Sources.Rss;
 using Sonrisa.Infrastructure.Sources.Usgs;
@@ -30,6 +32,9 @@ public static class SourceRegistration
         // Categories (spec §2.2).
         services.AddSingleton<IEventCategory, DisasterCategory>();
         services.AddSingleton<IEventCategory, NewsCategory>();
+        var assets = options.Market.Assets.Select(a => new MarketAsset(a.Key, a.DisplayName, a.Kind)).ToList();
+        services.AddSingleton(new MarketAssetCatalog(assets));
+        services.AddSingleton<IEventCategory, MarketCategory>();
 
         // Sources (spec §2.5). The RSS feed list is configuration (Sources:Rss).
         services.AddSingleton<SourceHttpClient>();
@@ -58,6 +63,28 @@ public static class SourceRegistration
                     news.Attempts, news.EffectiveRetryDelays, time,
                     sp.GetRequiredService<ILoggerFactory>().CreateLogger<FailoverSource>());
             });
+        }
+
+        // Market (spec §2.4, §2.5): crypto from CoinGecko; stocks from Finnhub if a key is set, else the mock.
+        services.AddSingleton<IObservationStore, InMemoryObservationStore>();
+        services.AddSingleton<MarketMovements>();
+        var crypto = assets.Where(a => a.Kind == MarketAsset.Crypto).ToList();
+        var stocks = assets.Where(a => a.Kind == MarketAsset.Stock).ToList();
+        if (options.Market.CoinGecko.Enabled && crypto.Count > 0)
+        {
+            services.AddSingleton<IEventSource>(sp => new CoinGeckoSource(sp.GetRequiredService<SourceHttpClient>(),
+                sp.GetRequiredService<MarketMovements>(), options.Market.CoinGecko, crypto));
+        }
+
+        if (stocks.Count > 0 && !string.IsNullOrWhiteSpace(options.Market.Finnhub.ApiKey))
+        {
+            services.AddSingleton<IEventSource>(sp => new FinnhubSource(sp.GetRequiredService<SourceHttpClient>(),
+                sp.GetRequiredService<MarketMovements>(), options.Market.Finnhub, stocks));
+        }
+        else if (stocks.Count > 0 && options.Market.MockStocks.Enabled)
+        {
+            services.AddSingleton<IEventSource>(sp => new MockStocksSource(sp.GetRequiredService<MarketMovements>(),
+                options.Market.MockStocks, stocks, Random.Shared));
         }
 
         services.AddSingleton<CategoryRegistry>();

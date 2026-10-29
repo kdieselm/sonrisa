@@ -20,6 +20,53 @@ public sealed class SourcesOptions
 
     /// <summary>RSS sources made of a primary and a fallback feed behind a circuit breaker (D26).</summary>
     public List<RssFailoverOptions> RssFailover { get; set; } = [];
+
+    public MarketOptions Market { get; set; } = new();
+}
+
+/// <summary>Section <c>Sources:Market</c>: the watched assets and the market sources (spec §2.5).</summary>
+public sealed class MarketOptions
+{
+    /// <summary>Assets with <c>Kind</c> "crypto" go to CoinGecko, "stock" to Finnhub or the mock.</summary>
+    public List<MarketAssetOptions> Assets { get; set; } = [];
+
+    public CoinGeckoOptions CoinGecko { get; set; } = new();
+    public FinnhubOptions Finnhub { get; set; } = new();
+    public MockStocksOptions MockStocks { get; set; } = new();
+}
+
+public sealed class MarketAssetOptions
+{
+    public string Key { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string Kind { get; set; } = "crypto";
+}
+
+/// <summary>Section <c>Sources:Market:CoinGecko</c>. The key is optional (a Demo key raises the rate limit).</summary>
+public sealed class CoinGeckoOptions
+{
+    public bool Enabled { get; set; } = true;
+    public string BaseUrl { get; set; } = "https://api.coingecko.com";
+    public string? ApiKey { get; set; }
+    public TimeSpan Interval { get; set; } = TimeSpan.FromMinutes(5);
+}
+
+/// <summary>Section <c>Sources:Market:Finnhub</c>. Used for stocks only if <see cref="ApiKey"/> is set.</summary>
+public sealed class FinnhubOptions
+{
+    public string BaseUrl { get; set; } = "https://finnhub.io/api/v1";
+    public string? ApiKey { get; set; }
+    public TimeSpan Interval { get; set; } = TimeSpan.FromMinutes(5);
+}
+
+/// <summary>Section <c>Sources:Market:MockStocks</c>: used for stocks when there is no Finnhub key.</summary>
+public sealed class MockStocksOptions
+{
+    public bool Enabled { get; set; } = true;
+    public TimeSpan Interval { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>Largest random change in percent per poll.</summary>
+    public double MaxStepPercent { get; set; } = 0.6;
 }
 
 /// <summary>Section <c>Sources:Usgs</c>.</summary>

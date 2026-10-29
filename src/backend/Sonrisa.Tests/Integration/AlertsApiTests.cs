@@ -258,7 +258,7 @@ public sealed class AlertsApiTests(PostgresFixture postgres) : IAsyncLifetime
         var catalog = await (await _client.SendJsonAsync(HttpMethod.Get, "/api/catalog", user.AccessToken))
             .ReadAsync<CatalogDto>(HttpStatusCode.OK);
 
-        Assert.Equal(["disaster", "news"], catalog.Categories.Select(c => c.Key).Order());
+        Assert.Equal(["disaster", "market", "news"], catalog.Categories.Select(c => c.Key).Order());
         Assert.Equal(["email", "slack"], catalog.Channels.Select(c => c.Key).Order());
         Assert.Equal(email, catalog.Channels.Single(c => c.Key == "email").DefaultConfig.GetProperty("address").GetString());
 

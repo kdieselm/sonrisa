@@ -33,6 +33,30 @@ public sealed class Alert
 
     public IReadOnlyCollection<AlertDestination> Destinations => _destinations;
 
+    /// <summary>The category's state for this alert, if it keeps one (market, spec §2.4). Loaded on request only.</summary>
+    public AlertState? State { get; private set; }
+
+    /// <summary>
+    /// Sets the start state when the alert becomes active (spec §2.5); null = the category keeps none. Load
+    /// <see cref="State"/> first when the alert may already have one.
+    /// </summary>
+    public void SetState(string? stateJson, DateTimeOffset now)
+    {
+        if (stateJson is null)
+        {
+            return;
+        }
+
+        if (State is null)
+        {
+            State = new AlertState(stateJson, now);
+        }
+        else
+        {
+            State.Set(stateJson, now);
+        }
+    }
+
     public bool IsDeleted => DeletedAt is not null;
 
     private Alert()

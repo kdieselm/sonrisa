@@ -26,9 +26,26 @@ public sealed class AlertConfiguration : IEntityTypeConfiguration<Alert>
         builder.Navigation(a => a.Destinations).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Ignore(a => a.IsDeleted);
 
+        // State of a stateful category (market): its own table, so matching and the owner never write the same row.
+        builder.HasOne(a => a.State).WithOne().HasForeignKey<AlertState>(s => s.AlertId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         // Matching loads the enabled alerts of one category (architecture §4); the user list filters by owner.
         builder.HasIndex(a => new { a.CategoryKey, a.Enabled });
         builder.HasIndex(a => a.UserId);
+    }
+}
+
+public sealed class AlertStateConfiguration : IEntityTypeConfiguration<AlertState>
+{
+    public void Configure(EntityTypeBuilder<AlertState> builder)
+    {
+        builder.ToTable("AlertStates");
+        builder.HasKey(s => s.AlertId);
+        builder.Property(s => s.AlertId).ValueGeneratedNever();
+
+        // Shape owned by the category (ADR-2, ADR-5); a string mapped to jsonb, never read by core code.
+        builder.Property(s => s.State).HasColumnType("jsonb").IsRequired();
     }
 }
 

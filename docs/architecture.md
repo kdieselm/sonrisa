@@ -206,7 +206,7 @@ Identity tables (`AspNetUsers`, `AspNetRoles`, …) come from `IdentityDbContext
 | S3a | category interface + registry with disaster and news (data shape, `MaxAge`, simulated data), source interface + registry, `SourcePoller`, `EventIngestor` (insert/update only, no alerts yet), USGS, RSS, simulate controller | admin events list, category registry with simulate forms | `Events` |
 | S3b | matching in `EventIngestor`, category rules (disaster with point + radius, D27; news), channel interface + registry with `ValidateConfig` / `MaskConfig` / `DefaultConfig` (email, Slack), destinations and alerts API, catalog, back-fill query, notifications query, admin user detail | destinations, alerts with rule forms, Notifications page, admin user detail | `Destinations`, `Alerts`, `AlertDestinations`, `Deliveries` |
 | S4 | `DeliveryWorker`, category `Describe` + `NotificationContent` (moved from S3b, D27), `Format` + `SendAsync` for email (MailKit) and Slack, Slack mock receiver, seeded demo user | admin delivery log, Slack mock list; statuses on the Notifications page | `SlackMockMessages` |
-| S5 | market category (rule, state, start state), `IObservationStore`, CoinGecko, mock stocks, Finnhub | market rule form, market simulate form | `AlertStates` |
+| S5 | market category (rule, state, start state), `IObservationStore` (Domain, D30), `MarketMovements` (grid crossing → event), CoinGecko, mock stocks (`ProducesSimulatedEvents`), Finnhub, `GET /api/market/assets` | market rule form, market simulate form, asset list service | `AlertStates` |
 | S6 | — | — | — (guides, the AC11 `grep` in the README, clean-clone run) |
 
 ## 6. Architecture decision records
@@ -222,7 +222,7 @@ Identity tables (`AspNetUsers`, `AspNetRoles`, …) come from `IdentityDbContext
 
 - **Context:** channels, categories and sources must be addable without touching shared code (D10, T85); no `switch` on type keys outside registries (T59, AC11). A message combines category data (key value, disclaimer) with channel format (HTML, Slack text).
 - **Decision:** three interfaces, each with a string `Key`:
-  - `IEventCategory` (Domain, pure): rule, data, state and simulated-data types with validators; `MaxAge`; `Match(event, alert, state)` → match + new state; `InitialState(rule, IObservationStore)`; `Describe(event, alert)` → `NotificationContent`; back-fill support flag;
+  - `IEventCategory` (Domain, pure): rule, data, state and simulated-data types with validators; `MaxAge`; `Matches(event, rule)` and, for stateful categories, `Evaluate(event, rule, state)` → `MatchOutcome` (match + new state) and `InitialState(rule, IObservationStore)`, both with default implementations (S5, D30); `Describe(event, alert)` → `NotificationContent`; back-fill support flag;
   - `INotificationChannel` (`Application/Abstractions`): `ValidateConfig`, `MaskConfig`, `DefaultConfig` (the create form's starting config, added in S3b), `Format(NotificationContent)`, `SendAsync` → `Sent | Retryable | Permanent`;
   - `IEventSource` (`Application/Abstractions`): `Category`, `Interval`, `FetchAsync`.
   Implementations are registered once in DI; a registry turns `IEnumerable<T>` into a dictionary by key and rejects duplicate keys at startup. Per-type rule, config, state and event data are stored as jsonb and (de)serialized only by the owning implementation. The frontend registry maps a key to standalone components: category → rule form, simulate form, event detail; channel → config form.
@@ -262,7 +262,7 @@ The brief asks for a system "flexible enough that we can add more channels later
 
 | Extension point | Interface | Backend registration | Frontend registration | Guide | Since |
 |---|---|---|---|---|---|
-| Event category | `IEventCategory` (Domain) | `Api/Configuration/SourceRegistration.cs` | `app/categories/category-registry.ts` | [`how-to/add-a-category.md`](how-to/add-a-category.md) | S3a (data, simulate); S3b rule, match, back-fill flag; S4 describe; S5 state |
+| Event category | `IEventCategory` (Domain) | `Api/Configuration/SourceRegistration.cs` | `app/categories/category-registry.ts` | [`how-to/add-a-category.md`](how-to/add-a-category.md) | S3a (data, simulate); S3b rule, match, back-fill flag; S4 describe; S5 state (`Evaluate`, `InitialState`) |
 | Source adapter | `IEventSource` (Application) | `Api/Configuration/SourceRegistration.cs`; a further feed of a known format is configuration only (`Sources:Rss`) | none | [`how-to/add-a-source.md`](how-to/add-a-source.md) | S3a |
 | Notification channel | `INotificationChannel` (Application) | `Api/Configuration/ChannelRegistration.cs` | `app/channels/channel-registry.ts` | [`how-to/add-a-channel.md`](how-to/add-a-channel.md) | S3b (config, mask, default); S4 adds format, send |
 

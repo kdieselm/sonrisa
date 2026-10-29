@@ -77,8 +77,8 @@ public sealed class SourcePoller(
         {
             try
             {
-                var result = await ingestor.IngestAsync(source.Key, source.CategoryKey, item, isSimulated: false,
-                    stoppingToken);
+                var result = await ingestor.IngestAsync(source.Key, source.CategoryKey, item,
+                    source.ProducesSimulatedEvents, stoppingToken);
                 inserted += result.Outcome == IngestOutcome.Inserted ? 1 : 0;
                 updated += result.Outcome == IngestOutcome.Updated ? 1 : 0;
                 queued += result.DeliveriesCreated;

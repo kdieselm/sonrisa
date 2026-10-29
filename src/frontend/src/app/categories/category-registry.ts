@@ -3,6 +3,9 @@ import { FormGroup, NonNullableFormBuilder } from '@angular/forms';
 import { DisasterRuleForm, DisasterRuleSummary, createDisasterRuleForm, disasterRuleData } from './disaster/disaster-rule';
 import { DisasterSimulateForm, createDisasterSimulateForm, disasterSimulateData } from './disaster/disaster-simulate-form';
 import { DisasterSummary } from './disaster/disaster-summary';
+import { MarketRuleForm, MarketRuleSummary, createMarketRuleForm, marketRuleData } from './market/market-rule';
+import { MarketSimulateForm, createMarketSimulateForm, marketSimulateData } from './market/market-simulate-form';
+import { MarketSummary } from './market/market-summary';
 import { NewsRuleForm, NewsRuleSummary, createNewsRuleForm, newsRuleData } from './news/news-rule';
 import { NewsSimulateForm, createNewsSimulateForm, newsSimulateData } from './news/news-simulate-form';
 import { NewsSummary } from './news/news-summary';
@@ -40,6 +43,16 @@ export const CATEGORY_UI: Readonly<Record<string, CategoryUi>> = {
     createRuleForm: createDisasterRuleForm,
     ruleData: disasterRuleData,
     ruleSummary: DisasterRuleSummary,
+  },
+  market: {
+    simulateForm: MarketSimulateForm,
+    createSimulateForm: createMarketSimulateForm,
+    simulateData: marketSimulateData,
+    summary: MarketSummary,
+    ruleForm: MarketRuleForm,
+    createRuleForm: createMarketRuleForm,
+    ruleData: marketRuleData,
+    ruleSummary: MarketRuleSummary,
   },
   news: {
     simulateForm: NewsSimulateForm,

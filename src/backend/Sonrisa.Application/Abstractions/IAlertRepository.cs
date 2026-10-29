@@ -29,7 +29,14 @@ public interface IAlertRepository
     /// </summary>
     Task<IReadOnlyList<MatchCandidate>> ListMatchCandidatesAsync(string categoryKey, DateTimeOffset firstSeenAt,
         CancellationToken ct);
+
+    /// <summary>
+    /// Saves the category state of an alert found by matching (spec §2.4); creates the row if the alert has none.
+    /// Written with the surrounding transaction.
+    /// </summary>
+    Task SaveStateAsync(long alertId, string stateJson, DateTimeOffset now, CancellationToken ct);
 }
 
-/// <summary>An alert as matching needs it.</summary>
-public sealed record MatchCandidate(long AlertId, string Rule, IReadOnlyList<long> DestinationIds);
+/// <summary>An alert as matching needs it. <paramref name="StateJson"/> is the category's state, null if none.</summary>
+public sealed record MatchCandidate(long AlertId, string Rule, IReadOnlyList<long> DestinationIds,
+    string? StateJson = null);
