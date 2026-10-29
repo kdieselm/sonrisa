@@ -9,8 +9,8 @@ namespace Sonrisa.Domain.Categories;
 /// by a <c>switch</c> on the key. How to add one: <c>docs/how-to/add-a-category.md</c>.
 /// </summary>
 /// <remarks>
-/// S3a: data, age limit, simulated data. S3b: the alert rule and matching. S4 adds the message content
-/// (<c>Describe</c>), S5 the per-alert state that a stateful category (market) needs.
+/// S3a: data, age limit, simulated data. S3b: the alert rule and matching. S4: the message content
+/// (<c>Describe</c>). S5 adds the per-alert state that a stateful category (market) needs.
 /// </remarks>
 public interface IEventCategory
 {
@@ -45,6 +45,13 @@ public interface IEventCategory
     /// category wrote). Pure: no clock, no I/O. Timing rules (active since, age limit) are applied by the caller.
     /// </summary>
     bool Matches(Event item, string ruleJson);
+
+    /// <summary>
+    /// The channel-neutral content of the notification for <paramref name="item"/> matched by <paramref name="alert"/>
+    /// (spec §2.6, ADR-2). Pure. <see cref="NotificationContent.SourceName"/> holds the source key; the delivery
+    /// processor replaces it with the display name and fills in the absolute alert link.
+    /// </summary>
+    NotificationContent Describe(Event item, Alert alert);
 
     /// <summary>
     /// Whether the alert page may list recent matching events (spec §2.5, D11). False for a category whose events are

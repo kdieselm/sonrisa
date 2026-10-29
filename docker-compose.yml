@@ -28,6 +28,17 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       Seed__AdminEmail: ${SEED_ADMIN_EMAIL}
       Seed__AdminPassword: ${SEED_ADMIN_PASSWORD}
+      # Demo user for the end-to-end run (skipped when SEED_DEMO_EMAIL is empty). A real SLACK_WEBHOOK_URL makes its
+      # Slack destination a real webhook; empty = the local mock receiver.
+      Seed__DemoEmail: ${SEED_DEMO_EMAIL:-}
+      Seed__DemoPassword: ${SEED_DEMO_PASSWORD:-}
+      Seed__DemoSlackWebhookUrl: ${SLACK_WEBHOOK_URL:-}
+      Channels__Email__Host: ${SMTP_HOST}
+      Channels__Email__Port: ${SMTP_PORT}
+      Channels__Email__From: ${SMTP_FROM}
+      Channels__Slack__MockEnabled: "true"
+      # Alert links in messages point at the web app as the browser reaches it.
+      Delivery__PublicBaseUrl: "http://localhost:${WEB_PORT}"
       # New Slack destinations default to the mock receiver in the API itself, reached by its service name.
       Channels__Slack__MockBaseUrl: "http://api:8080/mock/slack"
     ports:
@@ -36,6 +47,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
 
   web:
     build: ./src/frontend

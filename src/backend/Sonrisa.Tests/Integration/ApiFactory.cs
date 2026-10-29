@@ -18,5 +18,8 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
 
         // Never call the real feeds from tests; the poller test switches polling on with fake sources only.
         builder.UseSetting("Sources:PollingEnabled", "false");
+
+        // Deliveries stay Pending unless a test switches the worker on or runs a round itself.
+        builder.UseSetting("Delivery:WorkerEnabled", "false");
     }
 }

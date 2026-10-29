@@ -18,8 +18,15 @@ public static class ChannelRegistration
         services.AddSingleton(slack);
 
         // Channels (spec §2.6).
-        services.AddSingleton<INotificationChannel, EmailChannel>();
-        services.AddSingleton<INotificationChannel, SlackChannel>();
+        var email = configuration.GetSection(EmailOptions.Section).Get<EmailOptions>() ?? new EmailOptions();
+        services.AddSingleton<INotificationChannel>(new EmailChannel(email));
+
+        // One long-lived client without redirects: a webhook answers directly; the send timeout comes from the caller.
+        var slackHttp = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false })
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+        services.AddSingleton<INotificationChannel>(new SlackChannel(slack, slackHttp));
 
         services.AddSingleton<ChannelRegistry>();
         return services;

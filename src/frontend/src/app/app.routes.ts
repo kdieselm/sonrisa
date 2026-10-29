@@ -1,7 +1,9 @@
 import { Routes } from '@angular/router';
 import { AdminAuditPage } from './admin/admin-audit.page';
+import { AdminDeliveriesPage } from './admin/admin-deliveries.page';
 import { AdminEventsPage } from './admin/admin-events.page';
 import { AdminSimulatePage } from './admin/admin-simulate.page';
+import { AdminSlackMockPage } from './admin/admin-slack-mock.page';
 import { AdminUserPage } from './admin/admin-user.page';
 import { AdminUsersPage } from './admin/admin-users.page';
 import { AlertEditPage } from './alerts/alert-edit.page';
@@ -53,6 +55,18 @@ export const routes: Routes = [
     component: AdminSimulatePage,
     canActivate: [authGuard, adminGuard],
     title: 'Simulate event · Admin · Sonrisa',
+  },
+  {
+    path: 'admin/deliveries',
+    component: AdminDeliveriesPage,
+    canActivate: [authGuard, adminGuard],
+    title: 'Deliveries · Admin · Sonrisa',
+  },
+  {
+    path: 'admin/slack-mock',
+    component: AdminSlackMockPage,
+    canActivate: [authGuard, adminGuard],
+    title: 'Slack mock · Admin · Sonrisa',
   },
   {
     path: 'admin/audit',

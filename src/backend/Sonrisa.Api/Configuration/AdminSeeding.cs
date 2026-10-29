@@ -3,13 +3,21 @@ using Sonrisa.Infrastructure.Persistence;
 
 namespace Sonrisa.Api.Configuration;
 
-/// <summary>Seed admin account, bound from the <c>Seed</c> section (Compose: <c>SEED_ADMIN_*</c>).</summary>
+/// <summary>Seed accounts, bound from the <c>Seed</c> section (Compose: <c>SEED_ADMIN_*</c>, <c>SEED_DEMO_*</c>).</summary>
 public sealed class SeedOptions
 {
     public const string Section = "Seed";
 
     public string? AdminEmail { get; set; }
     public string? AdminPassword { get; set; }
+
+    /// <summary>Demo user for the end-to-end run (D27, <see cref="DemoSeeding"/>); empty email = none.</summary>
+    public string? DemoEmail { get; set; }
+
+    public string? DemoPassword { get; set; }
+
+    /// <summary>A real Slack webhook for the demo user's Slack destination (AC20); empty = the local mock.</summary>
+    public string? DemoSlackWebhookUrl { get; set; }
 }
 
 public static class AdminSeeding

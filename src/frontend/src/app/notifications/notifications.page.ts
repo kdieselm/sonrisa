@@ -8,8 +8,8 @@ import { Notification, UserApi } from '../user/user-api.service';
 const PAGE_SIZE = 50;
 
 /**
- * The user's notifications (spec §2.12): one row per event and destination, newest first. Sending starts in S4;
- * until then every new row stays "Pending".
+ * The user's notifications (spec §2.12): one row per event and destination, newest first. A row is "Pending" until
+ * the delivery worker has sent it ("Sent") or given up ("Failed", with a short generic reason).
  */
 @Component({
   selector: 'app-notifications-page',

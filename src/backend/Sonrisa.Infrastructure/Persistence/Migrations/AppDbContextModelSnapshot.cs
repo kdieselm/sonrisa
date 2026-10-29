@@ -419,6 +419,34 @@ namespace Sonrisa.Infrastructure.Persistence.Migrations
                     b.ToTable("Events", (string)null);
                 });
 
+            modelBuilder.Entity("Sonrisa.Infrastructure.Channels.Slack.Mock.SlackMockMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("character varying(16000)");
+
+                    b.Property<string>("HookName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceivedAt");
+
+                    b.ToTable("SlackMockMessages", (string)null);
+                });
+
             modelBuilder.Entity("Sonrisa.Infrastructure.Persistence.AppUser", b =>
                 {
                     b.Property<string>("Id")

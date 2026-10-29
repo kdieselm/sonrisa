@@ -10,9 +10,9 @@ namespace Sonrisa.Infrastructure.Channels.Slack;
 /// <summary>
 /// Slack incoming webhook (spec §2.6, T63, T70). Config: the webhook URL, a secret. It is masked in every response
 /// (only the last 4 characters), never logged and never audited. A new destination defaults to the local mock
-/// receiver. Sending is added in S4.
+/// receiver. Sending is in SlackChannel.Send.cs.
 /// </summary>
-public sealed class SlackChannel(SlackOptions options) : INotificationChannel
+public sealed partial class SlackChannel(SlackOptions options, HttpClient http) : INotificationChannel
 {
     public const string ChannelKey = "slack";
     public const int MaxUrlLength = 500;

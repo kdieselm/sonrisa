@@ -14,6 +14,7 @@ builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AdminQueryService>();
 builder.Services.AddEvents(builder.Configuration);
 builder.Services.AddChannels(builder.Configuration);
+builder.Services.AddDelivery(builder.Configuration);
 builder.Services.AddScoped<DestinationService>();
 builder.Services.AddScoped<AlertService>();
 builder.Services.AddScoped<NotificationService>();
@@ -26,6 +27,7 @@ app.ValidateEventRegistries();
 app.ValidateChannelRegistry();
 await app.MigrateDatabaseAsync();
 await app.SeedAdminAsync();
+await app.SeedDemoUserAsync();
 
 app.UseMiddleware<UnusedIdentityEndpointsMiddleware>();
 app.UseAuthentication();

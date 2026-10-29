@@ -11,8 +11,8 @@ public sealed class ChannelConfigTests
 {
     private const string MockBase = "http://api:8080/mock/slack";
     private static readonly ChannelContext Context = new("user-1", "owner@example.test");
-    private static readonly SlackChannel Slack = new(new SlackOptions { MockBaseUrl = MockBase });
-    private static readonly EmailChannel Email = new();
+    private static readonly SlackChannel Slack = new(new SlackOptions { MockBaseUrl = MockBase }, new HttpClient());
+    private static readonly EmailChannel Email = new(new EmailOptions());
 
     private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
 

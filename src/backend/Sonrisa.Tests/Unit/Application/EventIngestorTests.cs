@@ -261,6 +261,16 @@ public sealed class EventIngestorTests
 
         public void Add(Delivery delivery) => _pendingDeliveries.Add(delivery);
 
+        public Task<IReadOnlyList<long>> ListDueIdsAsync(DateTimeOffset now, int limit, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<DeliveryWork?> GetWorkAsync(long id, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task SaveAsync(CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<(IReadOnlyList<AdminDeliveryRow> Items, int Total)> ListForAdminAsync(DeliveryStatus? status,
+            int page, int pageSize, CancellationToken ct) => throw new NotSupportedException();
+
         public async Task<T> RunAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct)
         {
             _pending.Clear();

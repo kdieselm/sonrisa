@@ -84,6 +84,16 @@ public sealed class NewsCategory : IEventCategory
     public bool Matches(Event item, string ruleJson) =>
         DeserializeRule(ruleJson).MatchedKeywords(item.Title).Count > 0;
 
+    public NotificationContent Describe(Event item, Alert alert)
+    {
+        var rule = DeserializeRule(alert.Rule);
+        var matched = rule.MatchedKeywords(item.Title);
+        var keys = string.Join(", ", matched.Select(k => $"\"{k}\""));
+        return new NotificationContent(item.Title, DisplayName, matched.Count == 1 ? "Keyword" : "Keywords", keys,
+            item.SourceKey, item.Url, item.IsSimulated,
+            $"Alert \"{alert.Name}\": the headline contains {keys}.", $"/alerts/{alert.Id}", null);
+    }
+
     private sealed record RuleInput(IReadOnlyList<string?>? Keywords);
 
     private sealed record SimulatedNewsInput(string? FeedName);

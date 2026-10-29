@@ -58,6 +58,49 @@ public sealed class Delivery
 
     public Event? Event { get; private set; }
 
+    /// <summary>A successful attempt (spec §2.7): the delivery is done.</summary>
+    public void RecordSent(DateTimeOffset now)
+    {
+        if (Status != DeliveryStatus.Pending)
+        {
+            return;
+        }
+
+        Attempts++;
+        Status = DeliveryStatus.Sent;
+        SentAt = Event.ToStoredPrecision(now);
+        NextAttemptAt = null;
+        Failure = null;
+    }
+
+    /// <summary>A failed attempt that will be tried again at <paramref name="nextAttemptAt"/>. Still pending.</summary>
+    public void RecordRetry(string error, DateTimeOffset nextAttemptAt)
+    {
+        if (Status != DeliveryStatus.Pending)
+        {
+            return;
+        }
+
+        Attempts++;
+        LastError = Truncate(error);
+        NextAttemptAt = Event.ToStoredPrecision(nextAttemptAt);
+    }
+
+    /// <summary>The last failed attempt, or a permanent error: the channel gave up (<see cref="DeliveryFailure.SendFailed"/>).</summary>
+    public void RecordFinalFailure(string error)
+    {
+        if (Status != DeliveryStatus.Pending)
+        {
+            return;
+        }
+
+        Attempts++;
+        Fail(DeliveryFailure.SendFailed, error);
+    }
+
+    private static string Truncate(string error) =>
+        error.Length <= MaxErrorLength ? error : error[..MaxErrorLength];
+
     /// <summary>Ends a pending delivery as failed. Sent and already failed rows are not changed.</summary>
     public void Fail(DeliveryFailure failure, string error)
     {
@@ -68,7 +111,7 @@ public sealed class Delivery
 
         Status = DeliveryStatus.Failed;
         Failure = failure;
-        LastError = error.Length <= MaxErrorLength ? error : error[..MaxErrorLength];
+        LastError = Truncate(error);
         NextAttemptAt = null;
     }
 }

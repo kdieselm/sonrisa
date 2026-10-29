@@ -63,6 +63,36 @@ export interface SimulateEventRequest {
   data: Record<string, unknown>;
 }
 
+/** Mirrors `Sonrisa.Contracts.Dtos.Admin.AdminDeliveryDto`. */
+export interface AdminDelivery {
+  id: number;
+  createdAt: string;
+  ownerUserId: string;
+  ownerEmail: string | null;
+  alertId: number;
+  alertName: string;
+  eventId: number;
+  eventTitle: string;
+  eventIsSimulated: boolean;
+  channelKey: string;
+  channelName: string;
+  destinationName: string;
+  status: 'Pending' | 'Sent' | 'Failed';
+  attempts: number;
+  nextAttemptAt: string | null;
+  sentAt: string | null;
+  failure: string | null;
+  lastError: string | null;
+}
+
+/** Mirrors `Sonrisa.Contracts.Dtos.Admin.SlackMockMessageDto`. */
+export interface SlackMockMessage {
+  id: number;
+  hookName: string;
+  body: string;
+  receivedAt: string;
+}
+
 /** Admin API (spec §2.9): read-only lists, plus the "simulate event" form. */
 @Injectable({ providedIn: 'root' })
 export class AdminService {
@@ -80,6 +110,19 @@ export class AdminService {
   audit(page: number, pageSize: number): Observable<PagedResult<AuditEntry>> {
     const params = new HttpParams().set('page', page).set('pageSize', pageSize);
     return this.http.get<PagedResult<AuditEntry>>('/api/admin/audit', { params });
+  }
+
+  deliveries(page: number, pageSize: number, status: string): Observable<PagedResult<AdminDelivery>> {
+    let params = new HttpParams().set('page', page).set('pageSize', pageSize);
+    if (status) {
+      params = params.set('status', status);
+    }
+    return this.http.get<PagedResult<AdminDelivery>>('/api/admin/deliveries', { params });
+  }
+
+  slackMock(page: number, pageSize: number): Observable<PagedResult<SlackMockMessage>> {
+    const params = new HttpParams().set('page', page).set('pageSize', pageSize);
+    return this.http.get<PagedResult<SlackMockMessage>>('/api/admin/slack-mock', { params });
   }
 
   events(page: number, pageSize: number, category: string, source: string): Observable<PagedResult<AdminEvent>> {

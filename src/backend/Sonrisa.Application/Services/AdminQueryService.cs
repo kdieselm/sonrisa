@@ -3,6 +3,7 @@ using Sonrisa.Application.Mapping;
 using Sonrisa.Application.Registries;
 using Sonrisa.Contracts.Dtos;
 using Sonrisa.Contracts.Dtos.Admin;
+using Sonrisa.Domain.Entities;
 
 namespace Sonrisa.Application.Services;
 
@@ -12,6 +13,8 @@ public sealed class AdminQueryService(
     IAuditRepository audit,
     IAlertRepository alerts,
     IDestinationRepository destinations,
+    IDeliveryRepository deliveries,
+    ISlackMockStore slackMock,
     CategoryRegistry categories,
     ChannelRegistry channels)
 {
@@ -42,6 +45,61 @@ public sealed class AdminQueryService(
         var (items, total) = await users.ListAsync(page, pageSize, ct);
         var dtos = items.Select(u => new AdminUserDto(u.Id, u.Email, u.Roles)).ToList();
         return new PagedResult<AdminUserDto>(dtos, page, pageSize, total);
+    }
+
+    /// <summary>
+    /// The delivery log (spec §2.9): all deliveries, newest first, with the last error text the user never sees.
+    /// <paramref name="status"/> is a <see cref="DeliveryStatus"/> name or empty; any other text yields null.
+    /// </summary>
+    public async Task<PagedResult<AdminDeliveryDto>?> ListDeliveriesAsync(string? status, int page, int pageSize,
+        CancellationToken ct)
+    {
+        DeliveryStatus? filter = null;
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<DeliveryStatus>(status, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+            {
+                return null;
+            }
+
+            filter = parsed;
+        }
+
+        (page, pageSize) = Paging.Normalize(page, pageSize);
+        var (items, total) = await deliveries.ListForAdminAsync(filter, page, pageSize, ct);
+
+        var emails = await users.GetEmailsAsync(items.Select(i => i.OwnerUserId).Distinct().ToList(), ct);
+        var dtos = items.Select(r => new AdminDeliveryDto(
+            r.Id,
+            r.CreatedAt,
+            r.OwnerUserId,
+            emails.GetValueOrDefault(r.OwnerUserId),
+            r.AlertId,
+            r.AlertName,
+            r.EventId,
+            r.EventTitle,
+            r.EventIsSimulated,
+            r.ChannelKey,
+            channels.DisplayNameOf(r.ChannelKey),
+            r.DestinationName,
+            r.Status.ToString(),
+            r.Attempts,
+            r.NextAttemptAt,
+            r.SentAt,
+            r.Failure?.ToString(),
+            r.LastError)).ToList();
+        return new PagedResult<AdminDeliveryDto>(dtos, page, pageSize, total);
+    }
+
+    /// <summary>Messages the Slack mock receiver accepted, newest first (spec §2.9).</summary>
+    public async Task<PagedResult<SlackMockMessageDto>> ListSlackMockAsync(int page, int pageSize,
+        CancellationToken ct)
+    {
+        (page, pageSize) = Paging.Normalize(page, pageSize);
+        var (items, total) = await slackMock.ListAsync(page, pageSize, ct);
+        return new PagedResult<SlackMockMessageDto>(
+            items.Select(m => new SlackMockMessageDto(m.Id, m.HookName, m.Body, m.ReceivedAt)).ToList(), page,
+            pageSize, total);
     }
 
     public async Task<PagedResult<AuditEntryDto>> ListAuditAsync(int page, int pageSize, CancellationToken ct)

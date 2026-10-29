@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Sonrisa.Contracts.Dtos.Alerts;
@@ -47,7 +48,7 @@ public static class UserApi
                 new { categoryKey = "news", title, data = new { } }))
             .ReadAsync<AdminEventDto>(HttpStatusCode.Created);
 
-    public static async Task<List<Delivery>> DeliveriesOfAlertAsync(this ApiFactory factory, long alertId)
+    public static async Task<List<Delivery>> DeliveriesOfAlertAsync(this WebApplicationFactory<Program> factory, long alertId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -55,7 +56,7 @@ public static class UserApi
             .ToListAsync(Ct);
     }
 
-    public static async Task<List<AuditEntry>> AuditForAsync(this ApiFactory factory, string targetType, long id)
+    public static async Task<List<AuditEntry>> AuditForAsync(this WebApplicationFactory<Program> factory, string targetType, long id)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

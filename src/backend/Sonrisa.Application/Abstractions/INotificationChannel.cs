@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Sonrisa.Domain.Categories;
+using Sonrisa.Domain.ValueObjects;
 
 namespace Sonrisa.Application.Abstractions;
 
@@ -8,7 +9,7 @@ namespace Sonrisa.Application.Abstractions;
 /// config, validates it and decides what of it may leave the API. Core code finds a channel only through the channel
 /// registry by <see cref="Key"/>. How to add one: <c>docs/how-to/add-a-channel.md</c>.
 /// </summary>
-/// <remarks>S3b: config only. S4 adds formatting and sending.</remarks>
+/// <remarks>S3b: config. S4: formatting and sending.</remarks>
 public interface INotificationChannel
 {
     /// <summary>Stable key stored in <c>Destinations.ChannelKey</c>, for example <c>email</c>.</summary>
@@ -31,7 +32,23 @@ public interface INotificationChannel
 
     /// <summary>A config the create form starts with (JSON, already masked if it would hold a secret).</summary>
     string DefaultConfig(ChannelContext context);
+
+    /// <summary>
+    /// Turns the channel-neutral content into this channel's message (HTML email, plain-text Slack). Pure; the
+    /// channel never looks at the category (AC11).
+    /// </summary>
+    FormattedMessage Format(NotificationContent content);
+
+    /// <summary>
+    /// One attempt to send <paramref name="message"/> to the destination described by <paramref name="configJson"/>
+    /// (a config this channel wrote). Classifies the outcome instead of throwing for delivery problems; the error text
+    /// holds no secret (not the webhook URL). Honours <paramref name="ct"/>: the caller's timeout.
+    /// </summary>
+    Task<SendResult> SendAsync(string configJson, FormattedMessage message, CancellationToken ct);
 }
+
+/// <summary>A message in a channel's format: an optional subject (email) and the body.</summary>
+public sealed record FormattedMessage(string? Subject, string Body);
 
 /// <summary>
 /// What a channel may know when it validates a config: the owner, and on update the stored config, so a field the

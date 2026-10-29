@@ -254,10 +254,10 @@ Cutting an item also drops the acceptance criteria that depend on it (named belo
 | CoinGecko keyless rate limit and monthly cap | Not published (F1) | S5 (live call; fall back to mock if blocked) |
 | Finnhub free per-minute limit | Unverified (F2) | S5 (real free key) |
 | Finnhub `dp` baseline (previous close?) | Unverified (F9) | S5 (live call vs. `pc`) |
-| Mailpit REST API paths (for an automated AC1) | Unverified (F11) | S4 |
+| Mailpit REST API paths (for an automated AC1) | Partly verified in S4: against the running Compose container, `GET /api/v1/messages?limit=1` returned `total` and a `messages` list with `Subject` and `To[].Address`. The automated AC1 test does not use Mailpit: it receives the email on an in-process SMTP server (no new package, MailKit is the real sender); the Mailpit run is the manual part of AC1 | S4 |
 | `MapIdentityApi` works on a prefixed route group (`/api/auth`) | Verified in source (XML doc recommends `MapGroup`, log 15:56); runtime check by the AC2 tests, not yet run (no Docker) | S1 |
 | Controller actions appear in the endpoint data source (AC3 enumeration) | Verified: the AC3 test finds `/api/admin/users` and `/api/admin/audit` there (S2) | S2 |
 | Testcontainers runs PostgreSQL on the GitHub Actions runner | Unverified (workflow written; needs a GitHub remote) | S1 / first push |
 | jsonb mapping of rule, config, state and event data with the Npgsql EF Core provider | Event data verified in S3a: a `string` property with `HasColumnType("jsonb")` creates a `jsonb` column (migration `AddEvents`); `pg_typeof` and `Data->>'magnitude'` work on stored rows (integration test). Rule and config verified in S3b the same way (migration `AddAlertsAndDeliveries`, `pg_typeof` = `jsonb`, `Rule->'keywords'->>0`). State: S5 | S3a / S3b / S5 |
-| Slack incoming webhook 4xx codes | Unverified (D13) | S4 |
+| Slack incoming webhook 4xx codes | Still unverified against Slack's documentation (D13). The sender treats 429 and 5xx as retryable and every other non-2xx as final; the mock proves only that this policy is applied (AC10), not what Slack answers | S4 (AC20, optional real webhook) |
 | Terms of use of BBC, Guardian, CoinGecko, Finnhub | Not reviewed (T24) | Accepted as a known risk |

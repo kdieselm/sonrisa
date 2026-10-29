@@ -17,6 +17,31 @@ public sealed class DeliveryRepository(AppDbContext db) : IDeliveryRepository
         CancellationToken ct) =>
         FailPending(db.Set<Delivery>().Where(d => d.DestinationId == destinationId), failure, error, ct);
 
+    public async Task<IReadOnlyList<long>> ListDueIdsAsync(DateTimeOffset now, int limit, CancellationToken ct) =>
+        await db.Set<Delivery>().AsNoTracking()
+            .Where(d => d.Status == DeliveryStatus.Pending && d.NextAttemptAt <= now)
+            .OrderBy(d => d.NextAttemptAt).ThenBy(d => d.Id)
+            .Select(d => d.Id)
+            .Take(limit)
+            .ToListAsync(ct);
+
+    public async Task<DeliveryWork?> GetWorkAsync(long id, CancellationToken ct)
+    {
+        var delivery = await db.Set<Delivery>().FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (delivery is null)
+        {
+            return null;
+        }
+
+        var alert = await db.Set<Alert>().AsNoTracking().FirstAsync(a => a.Id == delivery.AlertId, ct);
+        var destination = await db.Set<Destination>().AsNoTracking()
+            .FirstAsync(d => d.Id == delivery.DestinationId, ct);
+        var item = await db.Set<Event>().AsNoTracking().FirstAsync(e => e.Id == delivery.EventId, ct);
+        return new DeliveryWork(delivery, alert, destination, item);
+    }
+
+    public Task SaveAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
+
     public async Task<(IReadOnlyList<NotificationRow> Items, int Total)> ListForUserAsync(string userId, int page,
         int pageSize, CancellationToken ct)
     {
@@ -26,6 +51,24 @@ public sealed class DeliveryRepository(AppDbContext db) : IDeliveryRepository
             .Skip(Paging.Offset(page, pageSize))
             .Take(pageSize)
             .ToListAsync(ct);
+        return (items, total);
+    }
+
+    public async Task<(IReadOnlyList<AdminDeliveryRow> Items, int Total)> ListForAdminAsync(DeliveryStatus? status,
+        int page, int pageSize, CancellationToken ct)
+    {
+        var query =
+            from d in db.Set<Delivery>().AsNoTracking()
+            join a in db.Set<Alert>() on d.AlertId equals a.Id
+            join e in db.Set<Event>() on d.EventId equals e.Id
+            join dest in db.Set<Destination>() on d.DestinationId equals dest.Id
+            where status == null || d.Status == status
+            orderby d.CreatedAt descending, d.Id descending
+            select new AdminDeliveryRow(d.Id, d.CreatedAt, a.UserId, a.Id, a.Name, e.Id, e.Title, e.IsSimulated,
+                dest.ChannelKey, dest.DisplayName, d.Status, d.Attempts, d.NextAttemptAt, d.SentAt, d.Failure,
+                d.LastError);
+        var total = await query.CountAsync(ct);
+        var items = await query.Skip(Paging.Offset(page, pageSize)).Take(pageSize).ToListAsync(ct);
         return (items, total);
     }
 

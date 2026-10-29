@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Sonrisa.Application.Abstractions;
+using Sonrisa.Infrastructure.Channels.Slack.Mock;
 using Sonrisa.Infrastructure.Persistence.Repositories;
 
 namespace Sonrisa.Infrastructure.Persistence;
@@ -19,6 +20,7 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<IDestinationRepository, DestinationRepository>();
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<ITransactionRunner, EfTransactionRunner>();
+        services.AddScoped<ISlackMockStore, SlackMockStore>();
         return services;
     }
 }

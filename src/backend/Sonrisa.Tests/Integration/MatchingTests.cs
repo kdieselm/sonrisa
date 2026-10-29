@@ -306,5 +306,9 @@ public sealed class MatchingTests(PostgresFixture postgres) : IAsyncLifetime
         public DataValidationResult ValidateSimulatedData(JsonElement data) => DataValidationResult.Valid("{}");
         public DataValidationResult ValidateRule(JsonElement rule) => DataValidationResult.Valid("{}");
         public bool Matches(Event item, string ruleJson) => true;
+
+        public NotificationContent Describe(Event item, Alert alert) =>
+            new(item.Title, DisplayName, "Key", "value", item.SourceKey, item.Url, item.IsSimulated, "test",
+                $"/alerts/{alert.Id}", null);
     }
 }

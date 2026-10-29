@@ -146,6 +146,35 @@ public sealed class DisasterCategory : IEventCategory
                || (data is { Latitude: { } lat, Longitude: { } lon } && circle.Contains(lat, lon));
     }
 
+    public const string Disclaimer = "Not an official warning. Follow your local authorities for safety information.";
+
+    public NotificationContent Describe(Event item, Alert alert)
+    {
+        var data = Deserialize(item.Data);
+        var rule = DeserializeRule(alert.Rule);
+        var conditions = new List<string>
+        {
+            string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"magnitude at least {rule.MinMagnitude:0.0}"),
+        };
+        if (rule.PlaceContains is { } text)
+        {
+            conditions.Add($"place contains \"{text}\"");
+        }
+
+        if (rule.Near is { } circle)
+        {
+            conditions.Add(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"within {circle.RadiusKm:0.##} km of {circle.Latitude:0.####}, {circle.Longitude:0.####}"));
+        }
+
+        var key = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"M {data.Magnitude:0.0} – {data.Place}");
+        return new NotificationContent(item.Title, DisplayName, "Magnitude", key, item.SourceKey, item.Url,
+            item.IsSimulated, $"Alert \"{alert.Name}\": {string.Join(", ", conditions)}.", $"/alerts/{alert.Id}",
+            Disclaimer);
+    }
+
     private sealed record RuleInput(double? MinMagnitude, string? PlaceContains, CircleInput? Near);
 
     private sealed record CircleInput(double? Latitude, double? Longitude, double? RadiusKm);

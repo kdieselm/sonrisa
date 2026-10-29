@@ -1,14 +1,19 @@
 import { Component, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 
-/** Logged-in area. Alerts, destinations and notifications are added here in later slices. */
+/** Logged-in area: who is logged in, and shortcuts to the pages of the account. */
 @Component({
   selector: 'app-account-page',
+  imports: [RouterLink],
   template: `
     <h1>Your account</h1>
     <p>Logged in as <strong>{{ auth.email() }}</strong>.</p>
-    <p>Alerts and notifications will appear here.</p>
+    <p>
+      <a routerLink="/alerts">Alerts</a> ·
+      <a routerLink="/destinations">Destinations</a> ·
+      <a routerLink="/notifications">Notifications</a>
+    </p>
     <button type="button" (click)="logout()">Log out</button>
   `,
 })

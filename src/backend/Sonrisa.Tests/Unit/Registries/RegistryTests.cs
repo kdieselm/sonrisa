@@ -71,6 +71,9 @@ public sealed class RegistryTests
         public bool Matches(Event item, string ruleJson) => false;
         public bool SupportsBackfill => false;
         public string? BackfillUnavailableReason => null;
+
+        public NotificationContent Describe(Event item, Alert alert) =>
+            new(item.Title, key, "Key", "value", item.SourceKey, null, false, "test", "/alerts/1", null);
     }
 
     private sealed class StubSource(string key, string category, TimeSpan? interval = null) : IEventSource

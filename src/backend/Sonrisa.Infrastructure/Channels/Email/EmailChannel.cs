@@ -3,14 +3,15 @@ using System.Text.Json;
 using Sonrisa.Application.Abstractions;
 using Sonrisa.Domain.Categories;
 using Sonrisa.Domain.Entities;
+using Sonrisa.Infrastructure.Configuration;
 
 namespace Sonrisa.Infrastructure.Channels.Email;
 
 /// <summary>
 /// Email (spec §2.6, T65, D13). Config: one address, by default the account email, copied when the destination is
-/// created. The address is the owner's own data, so it is not masked. Sending (MailKit) is added in S4.
+/// created. The address is the owner's own data, so it is not masked. Sending is in EmailChannel.Send.cs (MailKit).
 /// </summary>
-public sealed class EmailChannel : INotificationChannel
+public sealed partial class EmailChannel(EmailOptions options) : INotificationChannel
 {
     public const string ChannelKey = "email";
 
