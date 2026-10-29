@@ -25,13 +25,13 @@ public sealed class FieldErrors
 
     /// <summary>
     /// Reads <paramref name="data"/> as <typeparamref name="T"/>; a JSON object is required. On a wrong shape or type
-    /// it records one error on <c>data</c> and returns null.
+    /// it records one error on <paramref name="field"/> and returns null.
     /// </summary>
-    public T? Read<T>(JsonElement data) where T : class
+    public T? Read<T>(JsonElement data, string field = "data") where T : class
     {
         if (data.ValueKind != JsonValueKind.Object)
         {
-            Add("data", "An object with the category fields is required.");
+            Add(field, "An object with the category fields is required.");
             return null;
         }
 
@@ -41,7 +41,7 @@ public sealed class FieldErrors
         }
         catch (JsonException)
         {
-            Add("data", "One or more fields have the wrong type.");
+            Add(field, "One or more fields have the wrong type.");
             return null;
         }
     }

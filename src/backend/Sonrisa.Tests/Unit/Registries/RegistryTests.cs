@@ -2,6 +2,7 @@ using System.Text.Json;
 using Sonrisa.Application.Abstractions;
 using Sonrisa.Application.Registries;
 using Sonrisa.Domain.Categories;
+using Sonrisa.Domain.Entities;
 using Sonrisa.Domain.Categories.Disaster;
 using Sonrisa.Domain.Categories.News;
 
@@ -66,6 +67,10 @@ public sealed class RegistryTests
         public string DisplayName => key;
         public TimeSpan? MaxAge => null;
         public DataValidationResult ValidateSimulatedData(JsonElement data) => DataValidationResult.Valid("{}");
+        public DataValidationResult ValidateRule(JsonElement rule) => DataValidationResult.Valid("{}");
+        public bool Matches(Event item, string ruleJson) => false;
+        public bool SupportsBackfill => false;
+        public string? BackfillUnavailableReason => null;
     }
 
     private sealed class StubSource(string key, string category, TimeSpan? interval = null) : IEventSource

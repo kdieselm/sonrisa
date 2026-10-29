@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Sonrisa.Domain.Entities;
 
 namespace Sonrisa.Domain.Categories;
 
@@ -7,7 +8,10 @@ namespace Sonrisa.Domain.Categories;
 /// data and validates it. Core code finds a category only through the category registry by <see cref="Key"/>, never
 /// by a <c>switch</c> on the key. How to add one: <c>docs/how-to/add-a-category.md</c>.
 /// </summary>
-/// <remarks>S3a defines data, age limit and simulated data; S3b adds the rule, matching and message content.</remarks>
+/// <remarks>
+/// S3a: data, age limit, simulated data. S3b: the alert rule and matching. S4 adds the message content
+/// (<c>Describe</c>), S5 the per-alert state that a stateful category (market) needs.
+/// </remarks>
 public interface IEventCategory
 {
     /// <summary>Stable key stored in <c>Events.CategoryKey</c>, for example <c>disaster</c>.</summary>
@@ -29,9 +33,30 @@ public interface IEventCategory
     /// the category's own shape.
     /// </summary>
     DataValidationResult ValidateSimulatedData(JsonElement data);
+
+    /// <summary>
+    /// Validates the rule of an alert of this category (spec §2.2) and returns it as JSON in the category's own
+    /// shape, normalized (trimmed, defaults filled in). Stored in <c>Alerts.Rule</c> and read only by this category.
+    /// </summary>
+    DataValidationResult ValidateRule(JsonElement rule);
+
+    /// <summary>
+    /// Whether <paramref name="item"/> (an event of this category) matches <paramref name="ruleJson"/> (a rule this
+    /// category wrote). Pure: no clock, no I/O. Timing rules (active since, age limit) are applied by the caller.
+    /// </summary>
+    bool Matches(Event item, string ruleJson);
+
+    /// <summary>
+    /// Whether the alert page may list recent matching events (spec §2.5, D11). False for a category whose events are
+    /// observations relative to a previous state (market), where a past event says nothing about the alert.
+    /// </summary>
+    bool SupportsBackfill { get; }
+
+    /// <summary>Shown instead of the list when <see cref="SupportsBackfill"/> is false.</summary>
+    string? BackfillUnavailableReason { get; }
 }
 
-/// <summary>Either the normalized data JSON or field errors (field name → messages).</summary>
+/// <summary>Either the normalized JSON (event data or a rule) or field errors (field name → messages).</summary>
 public sealed record DataValidationResult(string? DataJson, IReadOnlyDictionary<string, string[]> Errors)
 {
     public bool IsValid => DataJson is not null;

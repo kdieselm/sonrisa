@@ -72,7 +72,7 @@ public sealed class SourcePoller(
 
         await using var scope = scopes.CreateAsyncScope();
         var ingestor = scope.ServiceProvider.GetRequiredService<EventIngestor>();
-        int inserted = 0, updated = 0, failed = 0;
+        int inserted = 0, updated = 0, failed = 0, queued = 0;
         foreach (var item in items)
         {
             try
@@ -81,6 +81,12 @@ public sealed class SourcePoller(
                     stoppingToken);
                 inserted += result.Outcome == IngestOutcome.Inserted ? 1 : 0;
                 updated += result.Outcome == IngestOutcome.Updated ? 1 : 0;
+                queued += result.DeliveriesCreated;
+                if (result.FailedRuleAlertIds is { Count: > 0 } broken)
+                {
+                    logger.LogWarning("Source {Source}: item {ExternalId}: the rule of alerts {AlertIds} could not be "
+                                      + "evaluated; they were skipped.", source.Key, item.ExternalId, broken);
+                }
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
@@ -90,7 +96,8 @@ public sealed class SourcePoller(
             }
         }
 
-        logger.LogInformation("Source {Source}: {Count} items, {Inserted} new, {Updated} updated, {Failed} failed.",
-            source.Key, items.Count, inserted, updated, failed);
+        logger.LogInformation(
+            "Source {Source}: {Count} items, {Inserted} new, {Updated} updated, {Failed} failed, {Queued} deliveries "
+            + "queued.", source.Key, items.Count, inserted, updated, failed, queued);
     }
 }

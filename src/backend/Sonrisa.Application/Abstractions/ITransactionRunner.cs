@@ -11,4 +11,9 @@ public interface ITransactionRunner
 }
 
 /// <summary>A unique index rejected a write; the transaction was rolled back.</summary>
-public sealed class DuplicateKeyException(string message, Exception inner) : Exception(message, inner);
+/// <param name="ConstraintName">The index that rejected it, if the database named it.</param>
+public sealed class DuplicateKeyException(string message, Exception inner, string? constraintName = null)
+    : Exception(message, inner)
+{
+    public string? ConstraintName { get; } = constraintName;
+}

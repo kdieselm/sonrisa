@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import type { AdminUserDetail } from './admin-user.page';
 
 /** Mirrors `Sonrisa.Contracts.Dtos.Admin.AdminUserDto`. */
 export interface AdminUser {
@@ -70,6 +71,10 @@ export class AdminService {
   users(page: number, pageSize: number): Observable<PagedResult<AdminUser>> {
     const params = new HttpParams().set('page', page).set('pageSize', pageSize);
     return this.http.get<PagedResult<AdminUser>>('/api/admin/users', { params });
+  }
+
+  user(id: string): Observable<AdminUserDetail> {
+    return this.http.get<AdminUserDetail>(`/api/admin/users/${encodeURIComponent(id)}`);
   }
 
   audit(page: number, pageSize: number): Observable<PagedResult<AuditEntry>> {

@@ -13,4 +13,11 @@ public interface IEventRepository
     /// <summary>Newest first by first-seen time. Filters are optional. <paramref name="page"/> is 1-based.</summary>
     Task<(IReadOnlyList<Event> Items, int Total)> ListAsync(string? categoryKey, string? sourceKey, int page,
         int pageSize, CancellationToken ct);
+
+    /// <summary>
+    /// Back-fill read (spec §2.5, AC14): events of one category first seen at or after <paramref name="since"/>,
+    /// newest first, at most <paramref name="limit"/>. Not tracked.
+    /// </summary>
+    Task<IReadOnlyList<Event>> ListRecentAsync(string categoryKey, DateTimeOffset since, int limit,
+        CancellationToken ct);
 }

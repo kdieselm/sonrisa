@@ -1,7 +1,9 @@
 import { Type } from '@angular/core';
 import { FormGroup, NonNullableFormBuilder } from '@angular/forms';
+import { DisasterRuleForm, DisasterRuleSummary, createDisasterRuleForm, disasterRuleData } from './disaster/disaster-rule';
 import { DisasterSimulateForm, createDisasterSimulateForm, disasterSimulateData } from './disaster/disaster-simulate-form';
 import { DisasterSummary } from './disaster/disaster-summary';
+import { NewsRuleForm, NewsRuleSummary, createNewsRuleForm, newsRuleData } from './news/news-rule';
 import { NewsSimulateForm, createNewsSimulateForm, newsSimulateData } from './news/news-simulate-form';
 import { NewsSummary } from './news/news-summary';
 
@@ -15,8 +17,16 @@ export interface CategoryUi {
   createSimulateForm(fb: NonNullableFormBuilder): FormGroup;
   /** Turns the form value into the `data` object the backend category validates. */
   simulateData(form: FormGroup): Record<string, unknown>;
-  /** One-line view of the event's `data` in the admin list; receives the `data` input. */
+  /** One-line view of an event's `data` (admin list, recent matches); receives the `data` input. */
   summary: Type<unknown>;
+  /** Alert rule fields; receives the `form` input created by `createRuleForm`. */
+  ruleForm: Type<unknown>;
+  /** `rule`: the stored rule when editing, null for a new alert. */
+  createRuleForm(fb: NonNullableFormBuilder, rule: unknown): FormGroup;
+  /** Turns the form value into the `rule` object the backend category validates. */
+  ruleData(form: FormGroup): Record<string, unknown>;
+  /** One-line view of an alert's `rule`; receives the `rule` input. */
+  ruleSummary: Type<unknown>;
 }
 
 /** Category key (as the backend sends it) → its components. The one place that lists the categories. */
@@ -26,12 +36,20 @@ export const CATEGORY_UI: Readonly<Record<string, CategoryUi>> = {
     createSimulateForm: createDisasterSimulateForm,
     simulateData: disasterSimulateData,
     summary: DisasterSummary,
+    ruleForm: DisasterRuleForm,
+    createRuleForm: createDisasterRuleForm,
+    ruleData: disasterRuleData,
+    ruleSummary: DisasterRuleSummary,
   },
   news: {
     simulateForm: NewsSimulateForm,
     createSimulateForm: createNewsSimulateForm,
     simulateData: newsSimulateData,
     summary: NewsSummary,
+    ruleForm: NewsRuleForm,
+    createRuleForm: createNewsRuleForm,
+    ruleData: newsRuleData,
+    ruleSummary: NewsRuleSummary,
   },
 };
 

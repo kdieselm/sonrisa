@@ -60,12 +60,12 @@ One project per layer; inside a project, folders by kind. Project references enf
 src/backend/
   Sonrisa.Api              HTTP and hosting (composition root)
     Controllers/             AuthController (logout), AlertsController, DestinationsController,
-                             NotificationsController; Admin/ (Users, Events, Deliveries, Audit,
+                             NotificationsController, CatalogController; Admin/ (Users, Events, Deliveries, Audit,
                              SlackMock, Simulate); SlackMockReceiverController
     Middleware/              404 for unused Identity endpoints (D22)
     Filters/                 Identity endpoint filter (audit, S2)
     HostedServices/          SourcePoller, DeliveryWorker (thin loops that call Application services)
-    Configuration/           DI registration (incl. the source registration, §3.1), auth options,
+    Configuration/           DI registration (incl. the source and channel registrations, §3.1, §8), auth options,
                              startup migration and seeding
   Sonrisa.Contracts        request and response DTOs (records); no logic, no references
     Dtos/                    Alerts/, Destinations/, Notifications/, Admin/, Events/
@@ -188,11 +188,12 @@ Identity tables (`AspNetUsers`, `AspNetRoles`, …) come from `IdentityDbContext
 | `AlertDestinations` | `(AlertId, DestinationId)` | many-to-many (T67) |
 | `AlertStates` | `AlertId` (PK), `State` (jsonb) | per-alert matcher state, shape owned by the category; only stateful categories (market: armed and last level per direction, spec §2.4) write rows |
 | `Events` | `Id`, `CategoryKey`, `SourceKey`, `ExternalId`, `Title`, `Summary`, `Url`, `PublishedAt`, `FirstSeenAt`, `UpdatedAt`, `IsSimulated`, `Data` (jsonb) | **unique `(SourceKey, ExternalId)`** (T31) |
-| `Deliveries` | `Id`, `AlertId`, `EventId`, `DestinationId`, `Status`, `Attempts`, `NextAttemptAt`, `LastError`, `CreatedAt`, `SentAt` | **unique `(AlertId, EventId, DestinationId)`** (D16, AC13); index `(Status, NextAttemptAt)` |
+| `Deliveries` | `Id`, `AlertId`, `EventId`, `DestinationId`, `Status`, `Attempts`, `NextAttemptAt`, `Failure`, `LastError`, `CreatedAt`, `SentAt` | **unique `(AlertId, EventId, DestinationId)`** (D16, AC13); index `(Status, NextAttemptAt)` |
 | `AuditEntries` | `Id`, `At`, `ActorUserId`, `Action`, `TargetType`, `TargetId`, `Outcome` | append-only (spec §2.10) |
 | `SlackMockMessages` | `Id`, `HookName`, `Body`, `ReceivedAt` | owned by the Slack channel's mock (`Infrastructure/Channels/Slack/Mock`) |
 
 - `Rule`, `Config`, `State` and `Data` are jsonb columns whose shape belongs to the category or channel (ADR-2). Core code stores and passes them without reading them.
+- `Deliveries.Failure` (S3b) is an owner-safe failure kind (`SendFailed`, `AlertDeleted`, `DestinationDeleted`): the Notifications page shows a short reason from it and never reads `LastError` (spec §2.12).
 - **Deletes:** alerts and destinations are soft-deleted; foreign keys from `Deliveries` are `RESTRICT`, so history is never cascaded away. Deleting either turns its `Pending` deliveries into `Failed`; the worker also checks `DeletedAt` before each send (a send already in flight completes).
 - **Masking:** responses and audit entries never carry a raw `Config`; they carry `INotificationChannel.MaskConfig(config)` (Slack: last 4 characters of the URL) (AC18).
 
@@ -203,8 +204,8 @@ Identity tables (`AspNetUsers`, `AspNetRoles`, …) come from `IdentityDbContext
 | S1 | Compose (with healthcheck), `.env.example`, the six projects of §2, DbContext + first migration, Identity, `AuthController` (logout), unused-endpoint middleware (D22), Testcontainers test base, CI | shell, landing, register, login, logout, auth service + interceptor | Identity |
 | S2 | `Admin` role + seeding, admin controllers, audit service, endpoint filter (audit part) | admin area: users, audit log; admin guard | `AuditEntries` |
 | S3a | category interface + registry with disaster and news (data shape, `MaxAge`, simulated data), source interface + registry, `SourcePoller`, `EventIngestor` (insert/update only, no alerts yet), USGS, RSS, simulate controller | admin events list, category registry with simulate forms | `Events` |
-| S3b | matching in `EventIngestor`, category rules and `Describe` (disaster, news), channel interface + registry with `ValidateConfig` / `MaskConfig` (email, Slack), destinations and alerts API, back-fill query, notifications query | destinations, alerts with rule forms, Notifications page | `Destinations`, `Alerts`, `AlertDestinations`, `Deliveries` |
-| S4 | `DeliveryWorker`, `Format` + `SendAsync` for email (MailKit) and Slack, Slack mock receiver | admin delivery log, Slack mock list; statuses on the Notifications page | `SlackMockMessages` |
+| S3b | matching in `EventIngestor`, category rules (disaster with point + radius, D27; news), channel interface + registry with `ValidateConfig` / `MaskConfig` / `DefaultConfig` (email, Slack), destinations and alerts API, catalog, back-fill query, notifications query, admin user detail | destinations, alerts with rule forms, Notifications page, admin user detail | `Destinations`, `Alerts`, `AlertDestinations`, `Deliveries` |
+| S4 | `DeliveryWorker`, category `Describe` + `NotificationContent` (moved from S3b, D27), `Format` + `SendAsync` for email (MailKit) and Slack, Slack mock receiver, seeded demo user | admin delivery log, Slack mock list; statuses on the Notifications page | `SlackMockMessages` |
 | S5 | market category (rule, state, start state), `IObservationStore`, CoinGecko, mock stocks, Finnhub | market rule form, market simulate form | `AlertStates` |
 | S6 | — | — | — (guides, the AC11 `grep` in the README, clean-clone run) |
 
@@ -222,7 +223,7 @@ Identity tables (`AspNetUsers`, `AspNetRoles`, …) come from `IdentityDbContext
 - **Context:** channels, categories and sources must be addable without touching shared code (D10, T85); no `switch` on type keys outside registries (T59, AC11). A message combines category data (key value, disclaimer) with channel format (HTML, Slack text).
 - **Decision:** three interfaces, each with a string `Key`:
   - `IEventCategory` (Domain, pure): rule, data, state and simulated-data types with validators; `MaxAge`; `Match(event, alert, state)` → match + new state; `InitialState(rule, IObservationStore)`; `Describe(event, alert)` → `NotificationContent`; back-fill support flag;
-  - `INotificationChannel` (`Application/Abstractions`): `ValidateConfig`, `MaskConfig`, `Format(NotificationContent)`, `SendAsync` → `Sent | Retryable | Permanent`;
+  - `INotificationChannel` (`Application/Abstractions`): `ValidateConfig`, `MaskConfig`, `DefaultConfig` (the create form's starting config, added in S3b), `Format(NotificationContent)`, `SendAsync` → `Sent | Retryable | Permanent`;
   - `IEventSource` (`Application/Abstractions`): `Category`, `Interval`, `FetchAsync`.
   Implementations are registered once in DI; a registry turns `IEnumerable<T>` into a dictionary by key and rejects duplicate keys at startup. Per-type rule, config, state and event data are stored as jsonb and (de)serialized only by the owning implementation. The frontend registry maps a key to standalone components: category → rule form, simulate form, event detail; channel → config form.
 - **Alternatives:** (a) one table or column set per type (T59 rejected: every new channel needs a migration and core changes); (b) EF Core inheritance (TPH) per type: typed queries, but adding a type changes the DbContext and needs a migration; (c) the channel renders the event itself: every channel would branch on category; (d) runtime plugins (T61 rejected).
@@ -261,14 +262,16 @@ The brief asks for a system "flexible enough that we can add more channels later
 
 | Extension point | Interface | Backend registration | Frontend registration | Guide | Since |
 |---|---|---|---|---|---|
-| Event category | `IEventCategory` (Domain) | `Api/Configuration/SourceRegistration.cs` | `app/categories/category-registry.ts` | [`how-to/add-a-category.md`](how-to/add-a-category.md) | S3a (data, simulate); S3b adds rule, match, describe |
+| Event category | `IEventCategory` (Domain) | `Api/Configuration/SourceRegistration.cs` | `app/categories/category-registry.ts` | [`how-to/add-a-category.md`](how-to/add-a-category.md) | S3a (data, simulate); S3b rule, match, back-fill flag; S4 describe; S5 state |
 | Source adapter | `IEventSource` (Application) | `Api/Configuration/SourceRegistration.cs`; a further feed of a known format is configuration only (`Sources:Rss`) | none | [`how-to/add-a-source.md`](how-to/add-a-source.md) | S3a |
-| Notification channel | `INotificationChannel` (Application) | channel registration (S3b) | channel config form registry (S3b) | `how-to/add-a-channel.md` (S3b/S4) | S3b, S4 |
+| Notification channel | `INotificationChannel` (Application) | `Api/Configuration/ChannelRegistration.cs` | `app/channels/channel-registry.ts` | [`how-to/add-a-channel.md`](how-to/add-a-channel.md) | S3b (config, mask, default); S4 adds format, send |
 
 What the core does for every registered type, so a new type gets it for free:
 
 - **Startup checks:** a duplicate key, a source of an unregistered category, or a source using the reserved key `simulated` stops the app at startup (`CategoryRegistry`, `SourceRegistry`).
-- **Storage:** per-type data is opaque jsonb (`Events.Data`; later `Alerts.Rule`, `Destinations.Config`, `AlertStates.State`), written and read only by the owning type.
+- **Storage:** per-type data is opaque jsonb (`Events.Data`, `Alerts.Rule`, `Destinations.Config`; later `AlertStates.State`), written and read only by the owning type.
+- **Matching and queueing:** every new event is matched against the enabled alerts of its category inside the event's transaction, and each match queues one `Pending` delivery per destination (`EventIngestor`).
+- **User API:** alerts and destinations with isolation by user, per-user limits, audit, masking and the catalog for the forms (`AlertService`, `DestinationService`, `CatalogService`).
 - **Ingestion:** polling loop, error isolation, one transaction per item, and insert or update by (source, external ID) (`SourcePoller`, `EventIngestor`).
 - **Admin view:** filters, the event list and the simulate form read the registries (`GET /api/admin/events/filters`) and render the type's own frontend components through `NgComponentOutlet`.
 

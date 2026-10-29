@@ -24,7 +24,8 @@ public sealed class EfTransactionRunner(AppDbContext db) : ITransactionRunner
         {
             // Disposing the transaction rolls it back; the failed changes must not be saved again later.
             db.ChangeTracker.Clear();
-            throw new DuplicateKeyException($"Unique index '{pg.ConstraintName}' rejected the write.", ex);
+            throw new DuplicateKeyException($"Unique index '{pg.ConstraintName}' rejected the write.", ex,
+                pg.ConstraintName);
         }
         catch
         {

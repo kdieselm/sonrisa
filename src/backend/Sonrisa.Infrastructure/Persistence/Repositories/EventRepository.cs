@@ -37,4 +37,13 @@ public sealed class EventRepository(AppDbContext db) : IEventRepository
             .ToListAsync(ct);
         return (items, total);
     }
+
+    public async Task<IReadOnlyList<Event>> ListRecentAsync(string categoryKey, DateTimeOffset since, int limit,
+        CancellationToken ct) =>
+        await db.Set<Event>().AsNoTracking()
+            .Where(e => e.CategoryKey == categoryKey && e.FirstSeenAt >= since)
+            .OrderByDescending(e => e.FirstSeenAt)
+            .ThenByDescending(e => e.Id)
+            .Take(limit)
+            .ToListAsync(ct);
 }

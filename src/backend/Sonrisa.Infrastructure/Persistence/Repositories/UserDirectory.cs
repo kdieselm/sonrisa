@@ -59,6 +59,28 @@ public sealed class UserDirectory(AppDbContext db) : IUserDirectory
             .ToDictionaryAsync(u => u.Id, u => u.Email!, ct);
     }
 
+    public async Task<UserSummary?> GetAsync(string userId, CancellationToken ct)
+    {
+        var user = await db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.Id, u.Email })
+            .FirstOrDefaultAsync(ct);
+        if (user is null)
+        {
+            return null;
+        }
+
+        var roles = await (
+                from ur in db.UserRoles
+                join r in db.Roles on ur.RoleId equals r.Id
+                where ur.UserId == userId && r.Name != null
+                select r.Name!)
+            .AsNoTracking()
+            .OrderBy(n => n)
+            .ToListAsync(ct);
+        return new UserSummary(user.Id, user.Email ?? string.Empty, roles);
+    }
+
     public async Task<string?> FindIdByEmailAsync(string email, CancellationToken ct)
     {
         // Same normalization as Identity's default (upper-invariant), so the lookup matches its unique user name.

@@ -11,6 +11,9 @@ import { AuthService } from './auth/auth.service';
       <a routerLink="/" class="brand">Sonrisa</a>
       <nav>
         @if (auth.isLoggedIn()) {
+          <a routerLink="/alerts" routerLinkActive="active">Alerts</a>
+          <a routerLink="/destinations" routerLinkActive="active">Destinations</a>
+          <a routerLink="/notifications" routerLinkActive="active">Notifications</a>
           @if (auth.isAdmin()) {
             <a routerLink="/admin" routerLinkActive="active">Admin</a>
           }

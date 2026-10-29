@@ -80,11 +80,13 @@ public sealed partial class AdminAuthorizationTests(PostgresFixture postgres) : 
         // Proves the role claim is in the bearer token (spec §8): without it the admin would get 403 too.
         // A GET must succeed. A write sent without a body must fail validation (400, or 415 without a content
         // type), which only happens after authorization passed; 401, 403, 404 and 5xx still fail the test.
-        // An endpoint with a route parameter may need a real ID here.
+        // Route parameters get the seeded admin's own user ID, so a GET by ID finds a row (the only parameter of an
+        // admin route today is a user ID).
         var tokens = await _client.LoginAsAdminAsync();
+        var adminId = await AdminUserIdAsync(tokens.AccessToken);
 
         var failures = new List<string>();
-        foreach (var (method, path) in AdminRoutes())
+        foreach (var (method, path) in AdminRoutes(adminId))
         {
             var response = await _client.SendAuthorizedAsync(method, path, tokens.AccessToken);
             var admitted = method == HttpMethod.Get
@@ -125,8 +127,16 @@ public sealed partial class AdminAuthorizationTests(PostgresFixture postgres) : 
             .ReadFromJsonAsync<Contracts.Dtos.Account.MeDto>(response.Content, TestApi.Ct))!;
     }
 
-    /// <summary>Every (method, path) under <c>/api/admin</c>; route parameters get a dummy value.</summary>
-    private List<(HttpMethod Method, string Path)> AdminRoutes()
+    private async Task<string> AdminUserIdAsync(string accessToken)
+    {
+        _ = accessToken;
+        await using var scope = _factory.Services.CreateAsyncScope();
+        return (await scope.ServiceProvider.GetRequiredService<Application.Abstractions.IUserDirectory>()
+            .FindIdByEmailAsync(ApiFactory.AdminEmail, TestApi.Ct))!;
+    }
+
+    /// <summary>Every (method, path) under <c>/api/admin</c>; route parameters get <paramref name="parameter"/>.</summary>
+    private List<(HttpMethod Method, string Path)> AdminRoutes(string parameter = "1")
     {
         var dataSource = _factory.Services.GetRequiredService<EndpointDataSource>();
         var routes = new List<(HttpMethod, string)>();
@@ -139,7 +149,7 @@ public sealed partial class AdminAuthorizationTests(PostgresFixture postgres) : 
                 continue;
             }
 
-            var path = RouteParameter().Replace(raw, "1");
+            var path = RouteParameter().Replace(raw, parameter);
             var methods = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? ["GET"];
             routes.AddRange(methods.Select(m => (new HttpMethod(m), path)));
         }

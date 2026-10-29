@@ -1,14 +1,15 @@
 import { Component, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { AdminNav } from './admin-nav';
 import { AdminService, AdminUser, PagedResult } from './admin.service';
-import { Pager } from './pager';
+import { Pager } from '../shared/pager';
 
 const PAGE_SIZE = 50;
 
-/** Admin view: users and their roles, paged by email (spec §2.9). Alerts and destinations per user come in S3b. */
+/** Admin view: users and their roles, paged by email (spec §2.9); each links to the user's alerts and destinations. */
 @Component({
   selector: 'app-admin-users-page',
-  imports: [AdminNav, Pager],
+  imports: [AdminNav, Pager, RouterLink],
   template: `
     <h1>Admin</h1>
     <app-admin-nav />
@@ -22,7 +23,7 @@ const PAGE_SIZE = 50;
         <tbody>
           @for (user of page.items; track user.id) {
             <tr>
-              <td>{{ user.email }}</td>
+              <td><a [routerLink]="['/admin/users', user.id]">{{ user.email }}</a></td>
               <td>{{ user.roles.length ? user.roles.join(', ') : '—' }}</td>
               <td class="mono">{{ user.id }}</td>
             </tr>

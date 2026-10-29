@@ -28,6 +28,8 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       Seed__AdminEmail: ${SEED_ADMIN_EMAIL}
       Seed__AdminPassword: ${SEED_ADMIN_PASSWORD}
+      # New Slack destinations default to the mock receiver in the API itself, reached by its service name.
+      Channels__Slack__MockBaseUrl: "http://api:8080/mock/slack"
     ports:
       - "${API_PORT}:8080"
     restart: unless-stopped

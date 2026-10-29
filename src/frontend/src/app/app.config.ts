@@ -5,7 +5,7 @@ import {
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/auth.interceptor';
@@ -15,7 +15,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideHttpClient(withInterceptors([authInterceptor])),
-    provideRouter(routes),
+    provideRouter(routes, withComponentInputBinding()),
     // After a reload only the refresh token survives (D20): get a new access token and the roles before the
     // first route runs, so the admin guard can decide synchronously.
     provideAppInitializer(() => firstValueFrom(inject(AuthService).restoreSession(), { defaultValue: undefined })),

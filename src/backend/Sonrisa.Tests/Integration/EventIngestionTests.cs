@@ -147,6 +147,9 @@ public sealed class EventIngestionTests(PostgresFixture postgres) : IAsyncLifeti
 
         public Task<(IReadOnlyList<Event> Items, int Total)> ListAsync(string? categoryKey, string? sourceKey,
             int page, int pageSize, CancellationToken ct) => inner.ListAsync(categoryKey, sourceKey, page, pageSize, ct);
+
+        public Task<IReadOnlyList<Event>> ListRecentAsync(string categoryKey, DateTimeOffset since, int limit,
+            CancellationToken ct) => inner.ListRecentAsync(categoryKey, since, limit, ct);
     }
 
     private static IncomingEvent Disaster(string id, string title, double magnitude) =>

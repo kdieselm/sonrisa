@@ -5,7 +5,7 @@ import { RouterLink } from '@angular/router';
 import { categoryUi } from '../categories/category-registry';
 import { AdminNav } from './admin-nav';
 import { AdminEvent, AdminService, EventFilters, PagedResult } from './admin.service';
-import { Pager } from './pager';
+import { Pager } from '../shared/pager';
 
 const PAGE_SIZE = 50;
 

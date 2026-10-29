@@ -1,6 +1,6 @@
 # Specification
 
-- **Status:** revised after review (phase 2). The raw AI draft is commit `bf14840`; the diff to this version shows the changes. Review findings and decisions: [`process/log.md`](../process/log.md), entries from 2026-10-29 16:00 (review) and D14–D16. Phase 3 added the Notifications page (D18: §2.12, AC21, cut item 6) and, from the architecture review, alert soft delete, three known limits and four unverified facts (D20).
+- **Status:** revised after review (phase 2). The raw AI draft is commit `bf14840`; the diff to this version shows the changes. Review findings and decisions: [`process/log.md`](../process/log.md), entries from 2026-10-29 16:00 (review) and D14–D16. Phase 3 added the Notifications page (D18: §2.12, AC21, cut item 6) and, from the architecture review, alert soft delete, three known limits and four unverified facts (D20). S3b added the optional point + radius to the disaster rule (D27: §2.2, §7, AC6).
 - **Tool / model:** Claude Code, Claude Opus 5.5 (session 03); review by a fresh subagent with [`prompts/templates/challenge.md`](../prompts/templates/challenge.md).
 - **Inputs:** [`brief.md`](brief.md), [`brainstorm/03-triage.md`](brainstorm/03-triage.md) (final), [`../process/log.md`](../process/log.md) (D1–D16).
 - **Rule:** built only from triage rows with the final verdict *accept*, plus the logged decisions D14–D16 taken during the spec review. Every statement cites its row (T…) or decision (D…). *Defer* rows appear only in §4 (out of scope). Facts that are not verified appear only in §8.
@@ -33,7 +33,7 @@ There is no global importance score (T2 rejected). Each alert has exactly one ca
 
 | Category | Rule fields | Matches when |
 |---|---|---|
-| Disaster | `minMagnitude` (≥ 4.5, the feed floor), optional `placeContains` (text) | `event.magnitude ≥ minMagnitude` and, if set, `event.place` contains `placeContains` (case-insensitive substring) (T75) |
+| Disaster | `minMagnitude` (≥ 4.5, the feed floor), optional `placeContains` (text), optional `near` (latitude, longitude, `radiusKm` 1–20 000) (D27) | `event.magnitude ≥ minMagnitude`; if set, `event.place` contains `placeContains` (case-insensitive substring) (T75); if set, the epicentre is within `radiusKm` of the point (great-circle distance, haversine). Every condition that is set must hold; an event without coordinates never matches a `near` rule |
 | Market | `asset` (one of the configured assets), `direction` (up / down / either), `thresholdPercent` (≥ 1, multiple of 0.5), optional `stepPercent` (multiple of 0.5) | see §2.4 (re-arm and steps, D14) |
 | News | `keywords` (1–10, at least one required) | any keyword or phrase occurs in the **headline** at word boundaries, case-insensitive (culture-invariant) (D15). The summary is not searched |
 
@@ -193,7 +193,7 @@ Each item is a *defer* row of the triage; the reason is in that row.
 | AC3 | A normal user gets 403 and an anonymous caller gets 401 on **every** admin endpoint; the test enumerates the admin routes from the app's endpoint list, so a new admin endpoint is covered without editing the test | Test |
 | AC4 | Reading, editing, deleting or linking another user's alert or destination by ID returns 404 and changes nothing | Test |
 | AC5 | Alert create, list, edit, enable/disable and delete work through the API; a disabled alert does not match; re-enabling resets `activeSince`. The UI offers the same five actions | Test + manual |
-| AC6 | Matching per category, including boundaries: magnitude equal to the minimum matches, 0.1 below does not; place text is case-insensitive; a keyword matches as a whole word in the headline (case-insensitive), not inside another word and not in the summary only | Test (unit) |
+| AC6 | Matching per category, including boundaries: magnitude equal to the minimum matches, 0.1 below does not; place text is case-insensitive; an epicentre exactly at the radius matches, just beyond does not, and an event without coordinates never matches a radius rule (D27); a keyword matches as a whole word in the headline (case-insensitive), not inside another word and not in the summary only | Test (unit) |
 | AC7 | An event first seen before `activeSince`, or a disaster or news event published more than 2 h before ingestion, creates no delivery | Test |
 | AC8 | Market re-arm and steps: the sequence of §2.4 (threshold 5, step 2.5) produces exactly 3 notifications at the documented points; an alert created while the change is already past its threshold does not notify until it has re-armed | Test (unit) |
 | AC9 | On a clean start, the admin event list shows real events from USGS and from at least one RSS feed within 10 minutes; the CoinGecko adapter parses a recorded real response into market observations; a simulated event shows the "simulated" label in the admin list and "SIMULATED" in the rendered message | Manual + test |
@@ -230,7 +230,7 @@ Cutting an item also drops the acceptance criteria that depend on it (named belo
 
 - **Logout window:** an access token issued before logout stays valid for up to 10 minutes (T57).
 - **Scale:** matching loops over all enabled alerts of a category per event; fine for a demo, not for large numbers of alerts (T71).
-- **Region:** disaster place filter is a text match on USGS `place`, not geographic (T75); no region filter for news and market.
+- **Region:** disasters can be filtered by a text match on the USGS `place` (T75) and by a point and radius (D27); the radius is a circle on a sphere, not a country or coastline. No region filter for news and market.
 - **News noise:** a common keyword (for example a country name) can still produce many notifications; only one feed is read at a time (D26), but there is no cross-source dedup (T32), so right after a switch between the Guardian and the BBC the same story can notify twice. Throttling and digests are out of scope (T40).
 - **Disaster revisions:** a revised magnitude is not matched again (T9), so an upgrade across an alert's threshold does not notify.
 - **Market baseline:** CoinGecko's change is a rolling 24 h value; Finnhub's `dp` baseline is unverified (§8). A "move" is the provider's number, not our own calculation. Grid crossings between two polls are seen only at poll time.
@@ -258,6 +258,6 @@ Cutting an item also drops the acceptance criteria that depend on it (named belo
 | `MapIdentityApi` works on a prefixed route group (`/api/auth`) | Verified in source (XML doc recommends `MapGroup`, log 15:56); runtime check by the AC2 tests, not yet run (no Docker) | S1 |
 | Controller actions appear in the endpoint data source (AC3 enumeration) | Verified: the AC3 test finds `/api/admin/users` and `/api/admin/audit` there (S2) | S2 |
 | Testcontainers runs PostgreSQL on the GitHub Actions runner | Unverified (workflow written; needs a GitHub remote) | S1 / first push |
-| jsonb mapping of rule, config, state and event data with the Npgsql EF Core provider | Event data verified in S3a: a `string` property with `HasColumnType("jsonb")` creates a `jsonb` column (migration `AddEvents`); `pg_typeof` and `Data->>'magnitude'` work on stored rows (integration test). Rule, config and state: S3b | S3a / S3b |
+| jsonb mapping of rule, config, state and event data with the Npgsql EF Core provider | Event data verified in S3a: a `string` property with `HasColumnType("jsonb")` creates a `jsonb` column (migration `AddEvents`); `pg_typeof` and `Data->>'magnitude'` work on stored rows (integration test). Rule and config verified in S3b the same way (migration `AddAlertsAndDeliveries`, `pg_typeof` = `jsonb`, `Rule->'keywords'->>0`). State: S5 | S3a / S3b / S5 |
 | Slack incoming webhook 4xx codes | Unverified (D13) | S4 |
 | Terms of use of BBC, Guardian, CoinGecko, Finnhub | Not reviewed (T24) | Accepted as a known risk |

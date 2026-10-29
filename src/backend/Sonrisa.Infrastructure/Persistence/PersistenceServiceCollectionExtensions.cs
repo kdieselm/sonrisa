@@ -15,6 +15,9 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<IAuditRepository, AuditRepository>();
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IEventRepository, EventRepository>();
+        services.AddScoped<IAlertRepository, AlertRepository>();
+        services.AddScoped<IDestinationRepository, DestinationRepository>();
+        services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<ITransactionRunner, EfTransactionRunner>();
         return services;
     }

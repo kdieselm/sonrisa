@@ -14,6 +14,9 @@ public interface IUserDirectory
         CancellationToken ct);
 
     Task<string?> FindIdByEmailAsync(string email, CancellationToken ct);
+
+    /// <summary>One user with roles; null if unknown.</summary>
+    Task<UserSummary?> GetAsync(string userId, CancellationToken ct);
 }
 
 public sealed record UserSummary(string Id, string Email, IReadOnlyList<string> Roles);

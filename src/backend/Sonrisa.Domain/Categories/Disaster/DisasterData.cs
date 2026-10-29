@@ -1,8 +1,8 @@
 namespace Sonrisa.Domain.Categories.Disaster;
 
 /// <summary>
-/// Data of a disaster event (spec §2.3). Coordinates are stored for a possible distance rule (D24); the current rule
-/// uses the magnitude and the place text only.
+/// Data of a disaster event (spec §2.3). The coordinates feed the optional point + radius of the rule (D24, D27); an
+/// event without them never matches a rule with a radius.
 /// </summary>
 public sealed record DisasterData(double Magnitude, string Place, double? Latitude, double? Longitude, double? DepthKm)
 {

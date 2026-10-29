@@ -1,12 +1,40 @@
 using Sonrisa.Application.Abstractions;
+using Sonrisa.Application.Mapping;
+using Sonrisa.Application.Registries;
 using Sonrisa.Contracts.Dtos;
 using Sonrisa.Contracts.Dtos.Admin;
 
 namespace Sonrisa.Application.Services;
 
 /// <summary>Read-only queries of the admin view (spec §2.9). Every list is paged (<see cref="Paging"/>).</summary>
-public sealed class AdminQueryService(IUserDirectory users, IAuditRepository audit)
+public sealed class AdminQueryService(
+    IUserDirectory users,
+    IAuditRepository audit,
+    IAlertRepository alerts,
+    IDestinationRepository destinations,
+    CategoryRegistry categories,
+    ChannelRegistry channels)
 {
+    /// <summary>
+    /// One user with their alerts and destinations (configs masked). One page holds all of them, because both are
+    /// capped per user below <see cref="Paging.MaxPageSize"/>. Null if the user is unknown.
+    /// </summary>
+    public async Task<AdminUserDetailDto?> GetUserAsync(string userId, CancellationToken ct)
+    {
+        var user = await users.GetAsync(userId, ct);
+        if (user is null)
+        {
+            return null;
+        }
+
+        var (userAlerts, _) = await alerts.ListForUserAsync(userId, 1, Paging.MaxPageSize, ct);
+        var (userDestinations, _) = await destinations.ListForUserAsync(userId, 1, Paging.MaxPageSize, ct);
+        return new AdminUserDetailDto(
+            new AdminUserDto(user.Id, user.Email, user.Roles),
+            userAlerts.Select(a => a.ToDto(categories)).ToList(),
+            userDestinations.Select(d => d.ToDto(channels)).ToList());
+    }
+
     public async Task<PagedResult<AdminUserDto>> ListUsersAsync(int page, int pageSize, CancellationToken ct)
     {
         (page, pageSize) = Paging.Normalize(page, pageSize);

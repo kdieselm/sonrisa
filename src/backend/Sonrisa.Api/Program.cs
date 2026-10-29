@@ -13,11 +13,17 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AdminQueryService>();
 builder.Services.AddEvents(builder.Configuration);
+builder.Services.AddChannels(builder.Configuration);
+builder.Services.AddScoped<DestinationService>();
+builder.Services.AddScoped<AlertService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<CatalogService>();
 builder.Services.AddControllers();
 
 var app = builder.Build();
 
 app.ValidateEventRegistries();
+app.ValidateChannelRegistry();
 await app.MigrateDatabaseAsync();
 await app.SeedAdminAsync();
 

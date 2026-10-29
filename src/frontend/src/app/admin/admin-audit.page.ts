@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { AdminNav } from './admin-nav';
 import { AdminService, AuditEntry, PagedResult } from './admin.service';
-import { Pager } from './pager';
+import { Pager } from '../shared/pager';
 
 const PAGE_SIZE = 50;
 
