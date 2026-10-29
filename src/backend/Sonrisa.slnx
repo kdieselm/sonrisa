@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="Sonrisa.Api/Sonrisa.Api.csproj" />
+  <Project Path="Sonrisa.Application/Sonrisa.Application.csproj" />
+  <Project Path="Sonrisa.Contracts/Sonrisa.Contracts.csproj" />
+  <Project Path="Sonrisa.Domain/Sonrisa.Domain.csproj" />
+  <Project Path="Sonrisa.Infrastructure/Sonrisa.Infrastructure.csproj" />
+  <Project Path="Sonrisa.Tests/Sonrisa.Tests.csproj" />
+</Solution>

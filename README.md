@@ -6,7 +6,32 @@ This repository is a take-home task: build a feature from a deliberately vague b
 
 ## How to run
 
-TODO: `docker compose up`, URLs, seeded admin account, 5-minute reviewer path.
+### Requirements
+
+| Needed for | Requirement |
+|---|---|
+| Running the app (required) | **Docker** with Compose v2: [Docker Desktop](https://www.docker.com/products/docker-desktop/) on Windows / macOS, or Docker Engine + the Compose plugin on Linux. Docker must be **running** before `docker compose up`. Nothing else is needed: the API, the frontend, PostgreSQL and Mailpit all run in containers. |
+| Running the automated tests (optional) | .NET 10 SDK, and Docker running: the integration tests start their own PostgreSQL container with Testcontainers. |
+| Running the frontend outside Docker (optional) | Node.js 24 and npm. |
+
+No API keys or accounts are needed.
+
+### Start
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Then open http://localhost:8080 (the port is `WEB_PORT` in `.env`). Mailpit's web UI is on http://localhost:8025.
+
+### Tests
+
+```bash
+dotnet test --solution src/backend/Sonrisa.slnx
+```
+
+TODO: seeded admin account, 5-minute reviewer path.
 
 ## How I worked
 

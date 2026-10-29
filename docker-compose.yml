@@ -1,0 +1,45 @@
+# docker compose up --build   (copy .env.example to .env first)
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      # -h 127.0.0.1: check over TCP, so the temporary socket-only server of the first init does not count as ready.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "${MAILPIT_UI_PORT}:8025"
+
+  api:
+    build: ./src/backend
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+    ports:
+      - "${API_PORT}:8080"
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./src/frontend
+    ports:
+      - "${WEB_PORT}:80"
+    restart: unless-stopped
+    depends_on:
+      - api
+
+volumes:
+  db-data:

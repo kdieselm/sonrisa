@@ -62,7 +62,8 @@ src/backend/
     Controllers/             AuthController (logout), AlertsController, DestinationsController,
                              NotificationsController; Admin/ (Users, Events, Deliveries, Audit,
                              SlackMock, Simulate); SlackMockReceiverController
-    Filters/                 Identity endpoint filter (audit, 404 for unused endpoints)
+    Middleware/              404 for unused Identity endpoints (D22)
+    Filters/                 Identity endpoint filter (audit, S2)
     HostedServices/          SourcePoller, DeliveryWorker (thin loops that call Application services)
     Configuration/           DI registration (incl. the source registration, §3.1), auth options,
                              startup migration and seeding
@@ -170,7 +171,7 @@ sequenceDiagram
 
 - `AddIdentityApiEndpoints<AppUser>()` + `AddRoles<IdentityRole>()` + `MapIdentityApi<AppUser>()` on a route group under `/api/auth`; bearer tokens (not cookies). `AppUser` lives in `Infrastructure/Persistence` (it depends on the Identity package); Domain entities refer to users only by `UserId`.
 - `POST /api/auth/logout` in `AuthController` (authorized): `UpdateSecurityStampAsync` → the old refresh token fails at `/refresh` (F8). Access-token lifetime 10 minutes.
-- An endpoint filter on the Identity route group answers 404 for the unused endpoints (S1) and writes audit entries for register and login (S2) (spec §2.8, unverified, fallback: own endpoints).
+- A middleware at the start of the pipeline answers 404 for every `/api/auth` path except register, login, refresh and logout (S1, D22). An endpoint filter on the Identity route group writes audit entries for register and login (S2) (spec §2.8, unverified, fallback: own endpoints).
 - **Frontend tokens (D20):** the access token is kept in memory only; the refresh token in `sessionStorage`, so a page reload keeps the user logged in and closing the tab ends the session. An HTTP interceptor adds the bearer header and calls `/refresh` once on 401; logout calls `/logout` and clears both. Route guards: logged-in, admin. Known limit: script injection (XSS) could read the refresh token (spec §7).
 - Admin endpoints: controllers under `Controllers/Admin/`, route prefix `/api/admin`, `[Authorize(Roles = "Admin")]` on each. AC3 enumerates every endpoint with the `/api/admin` prefix from the endpoint data source (unverified that controller actions appear there with their metadata, §7).
 
@@ -197,7 +198,7 @@ Identity tables (`AspNetUsers`, `AspNetRoles`, …) come from `IdentityDbContext
 
 | Slice | Backend | Frontend | Tables |
 |---|---|---|---|
-| S1 | Compose (with healthcheck), `.env.example`, the six projects of §2, DbContext + first migration, Identity, `AuthController` (logout), endpoint filter (404 part), Testcontainers test base, CI | shell, landing, register, login, logout, auth service + interceptor | Identity |
+| S1 | Compose (with healthcheck), `.env.example`, the six projects of §2, DbContext + first migration, Identity, `AuthController` (logout), unused-endpoint middleware (D22), Testcontainers test base, CI | shell, landing, register, login, logout, auth service + interceptor | Identity |
 | S2 | `Admin` role + seeding, admin controllers, audit service, endpoint filter (audit part) | admin area: users, audit log; admin guard | `AuditEntries` |
 | S3a | category interface + registry with disaster and news (data shape, `MaxAge`, simulated data), source interface + registry, `SourcePoller`, `EventIngestor` (insert/update only, no alerts yet), USGS, RSS, simulate controller | admin events list, category registry with simulate forms | `Events` |
 | S3b | matching in `EventIngestor`, category rules and `Describe` (disaster, news), channel interface + registry with `ValidateConfig` / `MaskConfig` (email, Slack), destinations and alerts API, back-fill query, notifications query | destinations, alerts with rule forms, Notifications page | `Destinations`, `Alerts`, `AlertDestinations`, `Deliveries` |
@@ -235,9 +236,9 @@ Identity tables (`AspNetUsers`, `AspNetRoles`, …) come from `IdentityDbContext
 ### ADR-4 Auth with Identity API endpoints and security-stamp logout
 
 - **Context:** real register, login and logout (D2, D5); roles for the admin view (T51); `MapIdentityApi` has no logout and its tokens are stateless (F8).
-- **Decision:** `AddIdentityApiEndpoints` + `AddRoles<IdentityRole>()` + `MapIdentityApi`, bearer tokens; `/api/auth/logout` updates the security stamp so the refresh token is rejected; access-token lifetime 10 minutes (D9); one `Admin` role, seeded admin from env (T51). Audit and the 404 for unused endpoints via an endpoint filter on the Identity route group. In the browser: access token in memory, refresh token in `sessionStorage` (D20).
+- **Decision:** `AddIdentityApiEndpoints` + `AddRoles<IdentityRole>()` + `MapIdentityApi`, bearer tokens; `/api/auth/logout` updates the security stamp so the refresh token is rejected; access-token lifetime 10 minutes (D9); one `Admin` role, seeded admin from env (T51). Audit via an endpoint filter on the Identity route group; the 404 for unused endpoints via a middleware at the start of the pipeline (D22). In the browser: access token in memory, refresh token in `sessionStorage` (D20).
 - **Alternatives:** (a) own JWT issuing: full control (token revocation lists), but security code we would have to write and test; (b) cookie auth: simpler logout and no token in script reach, but CSRF handling, and the spec chose bearer tokens; (c) per-request security-stamp validation (rejected in D9); (d) both tokens in `localStorage`: survives a browser restart, but both are readable by injected script; (e) memory only: safest, but every reload logs out, which gets in the way of the manual checks.
-- **Consequences:** an access token stays valid up to 10 minutes after logout; the refresh token is readable by injected script for the life of the tab (spec §7). The role claim in the bearer token, the endpoint filter, and `MapIdentityApi` on a prefixed group are unverified and checked first in S1/S2 (spec §8). If the filter cannot see the result, own `/register` and `/login` endpoints replace the mapped ones.
+- **Consequences:** an access token stays valid up to 10 minutes after logout; the refresh token is readable by injected script for the life of the tab (spec §7). The role claim in the bearer token and the audit endpoint filter are unverified and checked in S2 (spec §8); `MapIdentityApi` on a prefixed group is verified in the source (S1). If the filter cannot see the result, own `/register` and `/login` endpoints replace the mapped ones.
 
 ### ADR-5 Market state: last observation in memory, alert state in the database
 

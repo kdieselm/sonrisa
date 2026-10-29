@@ -109,7 +109,7 @@ Assets: crypto `bitcoin`, `ethereum`, `solana`; stocks `AAPL`, `MSFT`, `NVDA`, `
 - **Seeded admin (T51):** created at startup from `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` if it does not exist.
 - **Logout (T57, D9):** own `POST /logout` updates the user's security stamp, so every existing refresh token gets 401 at `/refresh` (F8). The client discards its tokens. The bearer access token lifetime is set to **10 minutes**; an access token issued before logout keeps working until it expires (known limit, §7).
 - **Audit hooks for register and login:** an endpoint filter on the Identity route group writes the audit entry from the result status. Whether this works is unverified (§8); the fallback is own `/register` and `/login` endpoints that mirror the framework handlers.
-- **Unused Identity endpoints (T55):** `MapIdentityApi` also maps `/confirmEmail`, `/resendConfirmationEmail`, `/forgotPassword`, `/resetPassword`, `/manage/2fa`, `/manage/info` (F8). Email confirmation, password reset and 2FA are out of scope; the same filter answers 404 for these paths, so `/manage/info` cannot change the account email either.
+- **Unused Identity endpoints (T55):** `MapIdentityApi` also maps `/confirmEmail`, `/resendConfirmationEmail`, `/forgotPassword`, `/resetPassword`, `/manage/2fa`, `/manage/info` (F8). Email confirmation, password reset and 2FA are out of scope; a middleware at the start of the pipeline answers 404 for every `/api/auth` path except register, login, refresh and logout, so `/manage/info` cannot change the account email either. (An endpoint filter cannot do this: it runs only after the body binds and after authorization, D22.)
 - **Isolation:** every user endpoint filters by the caller's user ID; another user's alert or destination returns **404** (not 403, so IDs are not confirmed).
 
 ### 2.9 Admin view (T42, T49, T50)
@@ -239,22 +239,23 @@ Cutting an item also drops the acceptance criteria that depend on it (named belo
 - **Resend after a crash (D20):** a crash between a successful send and the status update resends that one message on restart (at-least-once delivery).
 - **Market crossing during a restart (D20):** the first market poll after a restart has no previous value and emits nothing, so a threshold crossing that happens across a restart is missed.
 - **Refresh token in `sessionStorage` (D20):** injected script (XSS) could read it while the tab is open.
+- **Sessions end when the API container is recreated:** ASP.NET Core data-protection keys (which protect the bearer and refresh tokens) are stored inside the API container, so recreating it invalidates every token and users log in again. Persisting the keys is not needed for the demo.
 
 ## 8. Unverified facts (must be checked in the named slice, see `plan.md`)
 
 | Fact | Status | Check before |
 |---|---|---|
 | The bearer token from `MapIdentityApi` carries the role claim, so `[Authorize(Roles = "Admin")]` works | Unverified (CLAUDE.md risk list) | S2 (AC3) |
-| An endpoint filter on the `MapIdentityApi` route group can see the result of `/register` and `/login` and short-circuit unused paths | Unverified | S1 (fallback: own endpoints) |
-| Option name and effect for the 10-minute access-token lifetime | Partly verified (F8: 1 h default) | S1 (AC2) |
+| An endpoint filter on the `MapIdentityApi` route group can see the result of `/register` and `/login` | Unverified (short-circuiting unused paths: **not possible** with a filter, replaced by middleware, D22) | S2 (fallback: own endpoints) |
+| Option name and effect for the 10-minute access-token lifetime | Verified in source: `BearerTokenOptions.BearerTokenExpiration` for `IdentityConstants.BearerScheme` (log 15:56); runtime check by the AC2 test, not yet run (no Docker) | S1 (AC2) |
 | USGS publication delay relative to event time (does the 2 h window drop real quakes?) | Unverified | S3a |
 | CoinGecko keyless rate limit and monthly cap | Not published (F1) | S5 (live call; fall back to mock if blocked) |
 | Finnhub free per-minute limit | Unverified (F2) | S5 (real free key) |
 | Finnhub `dp` baseline (previous close?) | Unverified (F9) | S5 (live call vs. `pc`) |
 | Mailpit REST API paths (for an automated AC1) | Unverified (F11) | S4 |
-| `MapIdentityApi` works on a prefixed route group (`/api/auth`) | Unverified | S1 |
+| `MapIdentityApi` works on a prefixed route group (`/api/auth`) | Verified in source (XML doc recommends `MapGroup`, log 15:56); runtime check by the AC2 tests, not yet run (no Docker) | S1 |
 | Controller actions appear in the endpoint data source with their `[Authorize]` metadata (AC3 enumeration) | Unverified | S2 |
-| Testcontainers runs PostgreSQL on the GitHub Actions runner | Unverified | S1 |
+| Testcontainers runs PostgreSQL on the GitHub Actions runner | Unverified (workflow written; needs a GitHub remote) | S1 / first push |
 | jsonb mapping of rule, config, state and event data with the Npgsql EF Core provider | Unverified | S3a / S3b |
 | Slack incoming webhook 4xx codes | Unverified (D13) | S4 |
 | Terms of use of BBC, Guardian, CoinGecko, Finnhub | Not reviewed (T24) | Accepted as a known risk |

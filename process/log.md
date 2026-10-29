@@ -322,3 +322,66 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: Each trades safety or completeness against simplicity; none is decided by the brief.
 - What I did instead: All four recommendations accepted. (1) Access token in memory, refresh token in `sessionStorage`: survives a reload, ends with the tab; XSS exposure is a known limit. (2) Integration tests on PostgreSQL via `Testcontainers.PostgreSql` (package approval with a version check in S1, rule 4). (3) Alerts are soft-deleted like destinations, so the Notifications page and the delivery log keep their history; pending deliveries become `Failed`. (4) Two known limits instead of more machinery: a message may be resent after a crash (at-least-once), and a market crossing across a restart is missed (no observation table, keeps T22).
 - How I verified: Spec §2.6, §7 and §8 and `CLAUDE.md` (tests row) updated; architecture §3.3, §4, ADR-3/4/5 cite D20.
+
+---
+
+## S1 – foundation and auth (Claude Code session 05)
+
+### [2026-10-29 15:50] D21 – S1 plan: no UI library, Docker before coding
+- Type: decision
+- What the AI proposed / generated: The S1 plan (9 steps: packages, backend skeleton, auth, AC2 tests, Angular pages, Compose, CI, review, manual check). Before writing it, the AI found that Docker is still not installed (see the 12:16 check) and asked whether to use a UI component library.
+- What was wrong with it / what I weighed: Without Docker neither `docker compose up` nor the Testcontainers tests can run, so the slice cannot be verified. A UI library (Angular Material) helps the admin tables later, but it is a new npm dependency, and styling is cut item 1 anyway.
+- What I did instead: I install Docker Desktop before implementation. No UI library: plain CSS, no npm package beyond Angular itself. Plan approved as proposed.
+- How I verified: n/a (scope decision); `docker --version` fails on this machine at 15:50.
+
+### [2026-10-29 15:56] Check – S1 packages and two framework facts
+- Type: check
+- What the AI proposed / generated: Package list for S1 (architecture §7) and the token-lifetime option name.
+- What was wrong with it / what I weighed: Rule 4: every package must exist and be maintained; spec §8 lists the option name and the `/api/auth` prefix as unverified.
+- What I did instead: Approved with the plan (latest stable versions on nuget.org / npm, read from the registries today): `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3, `Microsoft.AspNetCore.Identity.EntityFrameworkCore` 10.0.14, `Microsoft.EntityFrameworkCore.Design` 10.0.14, `xunit.v3` 4.0.2, `xunit.runner.visualstudio` 4.0.1, `Microsoft.NET.Test.Sdk` 18.11.0, `Microsoft.AspNetCore.Mvc.Testing` 10.0.14, `Testcontainers.PostgreSql` 4.16.0, local tool `dotnet-ef` 10.0.14 (Microsoft, verified owner), Angular CLI 22.2.5. Framework facts, read in the `release/10.0` source of `dotnet/aspnetcore`:
+  - **Token lifetime:** `BearerTokenOptions.BearerTokenExpiration` (default 1 hour; `RefreshTokenExpiration` default 14 days), configured for the scheme `IdentityConstants.BearerScheme`. Verified.
+  - **Prefix:** the XML doc of `MapIdentityApi` says "Call `MapGroup` … to add a prefix to all the endpoints". Verified from the source; the integration test confirms it at runtime.
+  - **Endpoint filter gap:** the `/manage` endpoints carry `RequireAuthorization()`, and authorization runs before endpoint filters. So an anonymous call to `/manage/info` gets 401 from the framework, and only an authenticated call reaches the filter and gets 404. Both outcomes block the endpoint; the spec's "404" holds for authenticated callers. The test checks both.
+- How I verified: `api.nuget.org/v3-flatcontainer/<id>/index.json` for each package, `npm view @angular/cli version`, `dotnet tool search dotnet-ef`; source files `BearerTokenOptions.cs` and `IdentityApiEndpointRouteBuilderExtensions.cs` on GitHub.
+
+### [2026-10-29 16:05] Check – generated migration `InitialIdentity`
+- Type: check
+- What the AI proposed / generated: `dotnet ef migrations add InitialIdentity` (Infrastructure, startup project Api).
+- What was wrong with it / what I weighed: CLAUDE.md risk list: generated migration content must be read. EF also warned that no `IEntityTypeConfiguration` was found by the assembly scan (expected: S1 has no own tables yet).
+- What I did instead: Read the migration. It creates only the seven standard Identity tables (`AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`, `AspNetUserClaims`, `AspNetRoleClaims`, `AspNetUserLogins`, `AspNetUserTokens`), `Id` as `text`, `LockoutEnd` as `timestamp with time zone`. `EmailIndex` on `NormalizedEmail` is **not unique**; duplicates are still blocked because `MapIdentityApi` sets user name = email and `UserNameIndex` is unique (test `Register_twice_with_same_email_fails`). No own tables, nothing unexpected.
+- How I verified: Read `Persistence/Migrations/*_InitialIdentity.cs`; `MapIdentityApi` source (`SetUserNameAsync(user, email)`).
+
+### [2026-10-29 16:06] Course-correction – tooling surprises during scaffolding
+- Type: course-correction
+- What the AI proposed / generated: Scaffolded the projects with `dotnet new` and `ng new` and added the approved packages.
+- What was wrong with it / what I weighed: (1) `ng new` added `prettier` as a dev dependency and Vitest test scaffolding: not on the approved list (rule 4). (2) `xunit.v3` 4.x does not run under VSTest on the .NET 10 SDK ("Testing with VSTest target is no longer supported"), so `dotnet test` failed with the planned setup.
+- What I did instead: (1) Removed `prettier`, `tsconfig.spec.json` and the `test` script; the frontend has only Angular packages. (2) Opted in to Microsoft.Testing.Platform with `global.json` (`"test": {"runner": "Microsoft.Testing.Platform"}`) and removed the two VSTest-only packages from the approved list (`xunit.runner.visualstudio`, `Microsoft.NET.Test.Sdk`); CI runs `dotnet test --solution`. No new package was added.
+- How I verified: `dotnet test --solution src/backend/Sonrisa.slnx --list-tests` discovers all tests; `npm run build` passes; `package.json` lists only Angular, rxjs, tslib and typescript.
+
+### [2026-10-29 16:15] AI-review – S1 diff review (fresh subagent)
+- Type: ai-review
+- What the AI proposed / generated: The S1 diff, reviewed with [`prompts/templates/review.md`](../prompts/templates/review.md) by a subagent with no session history, by reading only (no Docker, nothing could run). Six findings:
+  1. **Endpoint filter cannot block unused endpoints (high):** filters run only after the request body binds, so `/resetPassword` with a partial or empty body gets 400 before the filter answers 404, which also reveals that the endpoint exists. My planned `resetPassword` test would have failed.
+  2. **Logout ignores a failed stamp update:** `UpdateSecurityStampAsync`'s result was not checked; on failure the client is told 204 while the old refresh token keeps working.
+  3. **Healthcheck too early on first start (unsure):** `pg_isready` over the Unix socket can pass during postgres' temporary init server; the API had no restart policy, so a failed startup migration would stop it for good.
+  4. **nginx resolves `api` once:** a recreated API container gets 502 until `web` restarts.
+  5. **Frontend logs out on any refresh error:** a 502 during an API restart deleted a valid refresh token.
+  6. **Test host config order (unsure):** `Program.cs` read the connection string before `Build()`; it was unclear whether `WebApplicationFactory.UseSetting` is visible that early.
+  - Test gaps: no empty-body cases for blocked endpoints; nothing pins the documented limit that an access token survives logout.
+- What was wrong with it / what I weighed: Checked each against the code and framework source. 1 is right and also explains the 401 on `/manage/*` found at 15:56 (authorization runs before filters too). 3 and 6 are uncertain but cheap to make robust. The logout-failure path cannot be triggered from an integration test without a fake user store; left without a test.
+- What I did instead: 1 → D22. 2 → logout returns 500 with a logged error when the stamp update fails. 3 → `pg_isready -h 127.0.0.1`, `restart: unless-stopped` for `api` and `web`. 4 → `resolver 127.0.0.11` and a variable upstream (prefix still kept). 5 → only 400/401 from `/refresh` clear the session. 6 → the connection string is read inside the `AddDbContext` lambda. New tests: every blocked path with full, partial and empty bodies, anonymous and authenticated (22 cases); access token still accepted after logout (spec §7).
+- How I verified: `dotnet build`, `npm run build`, test discovery (30 tests). **Not run yet:** the tests and `docker compose up` need Docker.
+
+### [2026-10-29 16:16] D22 – Unused Identity endpoints blocked by middleware, not an endpoint filter
+- Type: course-correction
+- What the AI proposed / generated: Spec §2.8 and architecture §3.3: "an endpoint filter on the Identity route group answers 404 for the unused endpoints" (my plan for S1 followed it).
+- What was wrong with it / what I weighed: An endpoint filter runs after authorization and after the body binds (review finding 1, log 15:56), so the endpoints answered 401 or 400 instead of 404 and could be detected. Options: own endpoints for everything (ADR-4 fallback; more code), or a middleware before authentication that allows only register, login, refresh and logout under `/api/auth`.
+- What I did instead: `UnusedIdentityEndpointsMiddleware`, first in the pipeline; the filter is removed. The audit part of the filter (S2) is not affected: `/register` and `/login` bind successfully, so a filter still sees their result there (still unverified, spec §8). Spec §2.8 and §8, architecture §2, §3.3, §5 and ADR-4 updated.
+- How I verified: Integration tests `Unused_identity_endpoints_return_404_for_*` (not yet run, no Docker).
+
+### [2026-10-29 16:40] Check – S1 tests and Compose run
+- Type: check
+- What the AI proposed / generated: The S1 code after the review fixes, run for the first time once Docker worked. First the Docker Desktop engine did not start ("Docker Desktop is unable to start"): the WSL 2 kernel was missing (`wsl --status`). I ran `wsl --update` and restarted Docker Desktop. At my request the README now lists Docker as a requirement for running and testing the project.
+- What was wrong with it / what I weighed: Three API log lines looked like errors on the first start: (1) `fail: … Failed executing DbCommand … FROM "__EFMigrationsHistory"`; (2) `libgssapi_krb5.so.2: cannot open shared object file`; (3) data-protection keys "may not be persisted outside of the container".
+- What I did instead: (1) EF queries the history table before creating it on an empty database; the migration is applied right after. Expected, no change. (2) Npgsql looks for the Kerberos library, which the `aspnet` image does not have. Kerberos/GSSAPI auth is not used, so there is no change. (3) Real: recreating the API container invalidates every token. Added to spec §7 as a known limit, no fix in the MVP.
+- How I verified: `dotnet test --solution src/backend/Sonrisa.slnx`: 30/30 passed (Testcontainers on Docker Desktop 29.9.2). `docker compose up --build -d` from `.env.example`: db and mailpit healthy, api and web up. Smoke test through nginx on `http://localhost:8080`: `/` and `/login` 200 (SPA fallback); register OK; login `expiresIn` = 600; refresh before logout OK; logout 204; refresh after logout **401**; anonymous `/api/auth/manage/info` **404**; Mailpit UI on 8025 is 200. Testcontainers on GitHub Actions is still unverified, because there is no remote yet.
