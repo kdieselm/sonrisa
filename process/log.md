@@ -286,3 +286,17 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: I meant the sent notifications: what went out by email or Slack must also be visible in the app under a Notifications menu item. Not a brief requirement, but it makes each slice checkable in the UI before delivery exists (S3b shows `Pending`, S4 turns it into `Sent` / `Failed`).
 - What I did instead: Spec §2.12 (reads the same `Delivery` rows, own rows only, no last-error text, masked URLs), §3 scope line, T81 removed from §4, T79 narrowed to auto-pause, new AC21, new cut item 6 (dropping AC21). This is a scope addition, not a cut; rule 6 is unaffected.
 - How I verified: Diff on `docs/spec.md`; AC21 assigned to S3b in the slice table.
+
+### [2026-10-29 15:08] Raw architecture draft
+- Type: ai-review
+- What the AI proposed / generated: [`docs/architecture.md`](../docs/architecture.md) from the spec, the slices and D1–D18: Mermaid component diagram, project layering, ingestion/delivery/auth flows, data model, a slice-by-component table and five ADRs (one process; interface + registry with typed jsonb; delivery queue in the database; Identity bearer + security-stamp logout; market state in memory, alert state in the database).
+- What was wrong with it / what I weighed: Not yet reviewed. Choices the draft makes that the spec did not: nginx proxy for `/api` (no CORS), ADR-3's at-least-once send after a crash, ADR-5's missed crossing after a restart, single-instance assumption, the package list in §7 (none approved yet except MailKit), and how tests get PostgreSQL (left open).
+- What I did instead: Committed raw so the review diff shows every change.
+- How I verified: Next entries (challenge review in a fresh subagent).
+
+### [2026-10-29 15:25] D19 – Backend split into one project per layer, controllers
+- Type: course-correction
+- What the AI proposed / generated: The architecture draft (before its raw commit) kept the four projects from `CLAUDE.md`: Api (endpoints, background services, DI), Domain (entities, rule records, interfaces, matching), Infrastructure, Tests. Endpoint style was not stated.
+- What was wrong with it / what I weighed: Too coarse: DTOs, configuration, entities, controllers and services would sit side by side in two large projects, and nothing but convention keeps layers apart. Asked whether I meant separate projects or folders, and controllers or minimal API.
+- What I did instead: Separate projects: Api (Controllers, Filters, HostedServices, Configuration), Contracts (DTOs), Application (Services, Abstractions, Registries, Mapping, Configuration), Domain (Entities, Categories, ValueObjects), Infrastructure (Persistence with repositories, Sources, Channels, Configuration), Tests. Project references enforce the rules (Domain and Contracts reference nothing; Application has no EF Core). Own endpoints are controllers; `MapIdentityApi` stays minimal API. Applied to the draft **before** its raw commit at my request, so the raw commit already contains it; this entry is the record. `CLAUDE.md` layout line updated.
+- How I verified: `docs/architecture.md` §2 table of project references; consistency pass over the diagram, §3.3, ADR-2, the slice table and §7.

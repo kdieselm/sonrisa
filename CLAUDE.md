@@ -33,7 +33,7 @@ Source of truth: [`docs/brief.md`](docs/brief.md) (the original task, verbatim).
 | CI | GitHub Actions: build + test |
 | Run | `docker compose up` (Postgres, Mailpit, API, frontend) |
 
-Layout: `src/backend/` (Api, Domain, Infrastructure, Tests), `src/frontend/` (Angular app).
+Layout: `src/backend/` (Api, Contracts, Application, Domain, Infrastructure, Tests; one project per layer, controllers for own endpoints, see `docs/architecture.md` §2), `src/frontend/` (Angular app).
 
 ## Working mode
 
