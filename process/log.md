@@ -219,3 +219,14 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: That note treated silence as approval for about 80 rows. Unflagged rows can still carry a wrong interpretation; T11 did (it silently read "channels" as notification channels only).
 - What I did instead: Went through all rows in batches of ten. Changes: D10 (three extension points), D11 (limited in-app backfill), D12 (audit log), D13 (MailKit, Slack error policy). The status line of `03-triage.md` now says so.
 - How I verified: Each batch was confirmed explicitly in the conversation; the diff from `fde6aa9` shows every change.
+
+---
+
+## Phase 2 – spec (Claude Code session 03)
+
+### [2026-10-29 15:45] Raw AI spec draft
+- Type: ai-review
+- What the AI proposed / generated: A full rewrite of [`docs/spec.md`](../docs/spec.md) from the final triage (accept rows only, each statement citing its T-row or D-decision). Phase plan approved first: raw draft → challenge review in a fresh subagent + coverage check → revision.
+- What was wrong with it / what I weighed: Not yet reviewed. The draft marks with ⚑ every value or rule the triage left open (one category per alert, market direction, keyword semantics, 1 % market floor, poll intervals, assets, 2 h age limit, market re-matching per crossing per UTC day, retry delays, 404 vs 403 for other users' IDs, unused Identity endpoints, cut-list positions of audit log / Finnhub / in-app back-fill). It also deviates from T33: the delivery key is `(alert, event, destination)`, not `(alert, event, channel)`, because T67 allows several destinations per channel.
+- What I did instead: Committed raw so the review diff shows every change.
+- How I verified: Next entries (challenge review, coverage check).
