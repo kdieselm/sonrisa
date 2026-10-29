@@ -78,3 +78,28 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: Checked the machine: .NET SDK 10.0.401, Node 24, git are installed; **Docker is not installed**, and neither is the `gh` CLI.
 - What I did instead: I will install Docker Desktop before M1. Phase 0 does not need it. The GitHub repo will be created by hand.
 - How I verified: `dotnet --list-sdks`, `node --version`, `docker --version`, `git --version`.
+
+---
+
+## Phase 1 – brainstorm (Claude Code session 01)
+
+### [2026-10-29 12:25] Brainstorm run in a context that already knew the plan
+- Type: check
+- What the AI proposed / generated: Raw brainstorm output for `prompts/brainstorm-opening.md`, saved unedited to [`docs/brainstorm/01-raw-output.md`](../docs/brainstorm/01-raw-output.md).
+- What was wrong with it / what I weighed: The run happened in the same session that had already read the planning handoff. The "competing interpretations" may therefore lean toward the decisions already made (severity score, hybrid sources, polling, strategy interface, operational admin view). A fresh session without the handoff would give a less biased baseline.
+- What I did instead: Kept the output raw and marked the limitation in its header. In phase 2 the spec is challenged with `prompts/templates/challenge.md`, and each interpretation that matches the handoff must be justified against the brief, not against the handoff.
+- How I verified: Review of the raw output against the brief in phase 2 (next entries).
+
+### [2026-10-29 12:32] Fresh-context brainstorm vs. the first run
+- Type: ai-review
+- What the AI proposed / generated: A second run of the same prompt in a subagent with no history, no handoff and no repo access: [`docs/brainstorm/02-raw-output-fresh.md`](../docs/brainstorm/02-raw-output-fresh.md).
+- What was wrong with it / what I weighed: Compared the two outputs topic by topic. The bias suspected in the previous entry is visible: in the first run, the interpretation that matches the handoff is always presented as the balanced middle option (severity 0–100 + user threshold, hybrid sources with simulated market, polling, strategy interface, operational admin). The fresh run does not converge on these. Findings that the first run missed or played down:
+  1. **Importance model.** The fresh run proposes *per-category rule shapes* (news: keywords; market: symbol + % move in a window; disaster: type, region, minimum severity) as the main user-driven option, and treats a single global score as one option among several. The handoff's 0–100 severity is not the only reasonable reading.
+  2. **Market data.** It names a keyless real option (CoinGecko, crypto) and points out that equity markets are closed nights and weekends. This challenges the handoff's claim that market data must be simulated because keyless market APIs are unreliable. Also: a market movement is a *computed* event (needs a baseline and a window, so state).
+  3. **Deduplication at three levels** (same item, same real-world event from several sources, same notification), plus a **backfill policy** on first start and **cooldown / re-arming** for threshold alerts. The first run only covered the first and third.
+  4. **Product context** (standalone app or a feature inside an existing product) as a top-5 decision.
+  5. **Safety and compliance:** disclaimers (disaster alerts are not official warnings; "not financial advice"), unsubscribe links, Slack webhooks stored as secrets.
+  6. **Slack:** webhook vs. OAuth app, channel vs. DM, about 1 message/second per webhook.
+  7. **Anti-pattern to avoid:** `email` / `slack_url` columns on the alert table instead of generic destinations.
+- What I did instead: Both outputs stay raw. Phase 2 (spec) must explicitly decide items 1–7 above; the handoff's choices are inputs, not defaults. Item 2 can overturn an existing decision (simulated market source) and needs a verified answer.
+- How I verified: Side-by-side reading of both files. The factual claims of the fresh run (CoinGecko keyless access, Finnhub and Alpha Vantage limits, GDELT update interval, Slack webhook rate limit) are **unverified** and must be checked against official docs before they are used in the spec.
