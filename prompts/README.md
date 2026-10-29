@@ -6,7 +6,8 @@ All prompts used during the project. Full transcripts are in [`sessions/`](sessi
 |---|---|---|
 | Planning (claude.ai) | see `sessions/` | Produced the planning handoff and decisions D1–D3 |
 | 0. Setup | see `sessions/01-setup.md` | Handoff reviewed against the original task; repo skeleton |
-| 1. Brainstorm | [`brainstorm-opening.md`](brainstorm-opening.md) | TODO |
+| 1. Brainstorm | [`brainstorm-opening.md`](brainstorm-opening.md) | Run twice: in session 01 and in a fresh subagent |
+| 1b. Triage | TODO | Runs in a new session |
 | 2. Spec | TODO | |
 | 3. Architecture | TODO | |
 | M1–M4 | [`templates/task.md`](templates/task.md), [`templates/review.md`](templates/review.md) | TODO |

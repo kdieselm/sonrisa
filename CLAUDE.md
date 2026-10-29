@@ -37,12 +37,15 @@ Layout: `src/backend/` (Api, Domain, Infrastructure, Tests), `src/frontend/` (An
 
 ## Working mode
 
+- Phases, order and deliverables: [`docs/plan.md`](docs/plan.md).
+- **Validate before building on AI output.** Brainstorm results reach the spec only through the triage (`docs/brainstorm/03-triage.md`). Facts (APIs, packages, limits, URLs, framework behavior) are checked against official sources; anything unverified is marked as such and never presented as fact.
 - Use the templates in [`prompts/templates/`](prompts/templates/): `task.md` to start work, `review.md` for diff review, `challenge.md` to attack a plan or schema.
 - After each milestone: run a review of the diff, log the findings, then propose a commit.
 - Risky points to verify (each one gets a log entry): package/API existence, role claim in the bearer token (normal user → 403 on admin API), user isolation by ID, matching correctness, no double delivery (unique index), Slack failure path (500 → retry → final failure), generated migration content, real feed URLs and formats, `docker compose up` on a clean clone.
 
 ## Key documents
 
+- [`docs/plan.md`](docs/plan.md) – plan of attack: phases, deliverables, order
 - [`docs/spec.md`](docs/spec.md) – requirements traceability, assumptions, scope, acceptance criteria
 - [`docs/architecture.md`](docs/architecture.md) – diagram and ADRs
 - [`process/log.md`](process/log.md) – decision and AI-review log

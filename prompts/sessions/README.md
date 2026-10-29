@@ -3,7 +3,7 @@
 | # | Tool | Phase | Transcript |
 |---|---|---|---|
 | 00 | claude.ai | Planning conversation (produced the planning handoff, D1–D3) | TODO: export from claude.ai into this folder |
-| 01 | Claude Code | Phase 0: handoff reviewed against the task, repo skeleton | [`01-setup.md`](01-setup.md) (full transcript exported at the end of the project) |
+| 01 | Claude Code | Phases 0–1: handoff reviewed against the task, repo skeleton, brainstorm (two runs), triage phase added | [`01-setup.md`](01-setup.md) (full transcript exported at the end of the project) |
 
 ## Session 01 – prompts so far
 

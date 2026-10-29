@@ -103,3 +103,10 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
   7. **Anti-pattern to avoid:** `email` / `slack_url` columns on the alert table instead of generic destinations.
 - What I did instead: Both outputs stay raw. Phase 2 (spec) must explicitly decide items 1–7 above; the handoff's choices are inputs, not defaults. Item 2 can overturn an existing decision (simulated market source) and needs a verified answer.
 - How I verified: Side-by-side reading of both files. The factual claims of the fresh run (CoinGecko keyless access, Finnhub and Alpha Vantage limits, GDELT update interval, Slack webhook rate limit) are **unverified** and must be checked against official docs before they are used in the spec.
+
+### [2026-10-29 13:05] D7 – Separate validation phase for the brainstorm
+- Type: course-correction
+- What the AI proposed / generated: After the brainstorm, the AI planned to go straight to phase 2 and decide the open points while writing the spec draft.
+- What was wrong with it / what I weighed: I asked when we decide what stays from the brainstorm. Folding validation into the spec hides exactly the judgment the task evaluates: which AI points were accepted, rejected or deferred, and which facts were checked. It also lets unverified facts slip into the spec.
+- What I did instead: New phase 1b, brainstorm triage: one table of all points from both runs, each with a verdict, a reason tied to the brief, and fact checks against official sources; raw proposal and final decisions as separate commits. The spec may use only accepted items. The plan of attack was also missing from the repo (it only existed in the session's plan file), so it is now [`docs/plan.md`](../docs/plan.md).
+- How I verified: `docs/plan.md` and `CLAUDE.md` updated; the triage runs in a new session with a fresh context.
