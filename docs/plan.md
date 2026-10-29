@@ -7,7 +7,7 @@ The task asks me to define my own deliverables, their order and the reasons. Thi
 1. **Understand before deciding.** The brief is deliberately vague, so the first outputs are questions and interpretations, not solutions.
 2. **Validate AI output before building on it.** Every AI-generated planning document passes a separate validation step (fact checks, accept/reject decisions) before the next phase may use it.
 3. **Documents before code.** The spec and architecture fix the decisions; the code implements them.
-4. **Vertical risk first.** Auth and the data model come first because everything depends on them; the UI comes last because it only consumes the API.
+4. **Vertical slices, each manually verifiable.** Implementation runs in thin end-to-end slices (backend + frontend + tests). After each slice I check the result in the browser before the commit. Auth and the data model are still first, because everything depends on them. (Replaced "the UI comes last", see D17 in the log.)
 5. **Visible judgment.** Raw AI output and the revised version are committed separately, so the diff shows what was changed.
 
 ## Phases and deliverables
@@ -19,20 +19,30 @@ The task asks me to define my own deliverables, their order and the reasons. Thi
 | 1b | **Brainstorm validation (triage)** | [`docs/brainstorm/03-triage.md`](brainstorm/03-triage.md): every point of both runs with a verdict (accept / reject / defer / verify), a reason tied to the brief, and fact checks against official sources | The brainstorm is AI output and may contain bias and hallucinated facts. Nothing reaches the spec without an explicit decision | `docs: raw triage proposal` → `docs: brainstorm triage decisions` |
 | 2 | Spec | [`docs/spec.md`](spec.md): assumptions, MVP scope, out of scope, acceptance criteria. Built **only** from accepted triage items | Fixes what is built and how it is checked | `docs: raw AI spec draft` → `docs: revise spec after review` |
 | 3 | Architecture | [`docs/architecture.md`](architecture.md): one diagram and 3–5 short ADRs | Fixes how it is built; decisions with alternatives | `docs: raw architecture draft` → `docs: architecture and ADRs` |
-| M1 | Skeleton and auth | .NET solution, EF Core + Postgres, Docker Compose, Identity with roles, seeded admin, `/logout` | Everything else depends on users and the database | `feat: skeleton and auth` |
-| M2 | Events and alerts | Event model, real and simulated sources, alert CRUD, matching | The core domain | `feat: event ingestion and alerts` |
-| M3 | Delivery | Channel abstraction, email and Slack, delivery records, retry | Completes the end-to-end path | `feat: notification delivery` |
-| M4 | Frontend | Angular: register/login/logout, own alerts, admin view | Consumes a finished API | `feat: frontend` |
-| T | Tests | Matching, authorization and logout tests; clean-clone run | Proves the acceptance criteria | `test: …` |
 | Z | Wrap-up | README with reviewer path, retrospective, exported prompts | Makes the process reviewable | `docs: readme, retrospective, prompts` |
 
-## How every milestone runs
+## Implementation slices
+
+Each slice is backend + frontend + its own tests, and ends with a manual check in the browser (D17). AC numbers refer to [`docs/spec.md`](spec.md) §5.
+
+| # | Slice | Content | Manual check | ACs | Commit |
+|---|---|---|---|---|---|
+| S1 | Foundation and auth | Docker Compose (Postgres, API, frontend), EF Core migrations at startup, Identity register/login/refresh, own `/logout`, 10-minute access token; Angular landing, register, login, logout pages; CI (build + test) | `docker compose up` → register, log in, log out in the browser | AC2 | `feat: foundation and auth` |
+| S2 | Admin | `Admin` role, seeded admin, role claim in the bearer token, admin area: users, audit log (register, login, logout) | Admin logs in, sees the new user and the audit entries; a normal user cannot open the admin area | AC3, AC12 (auth part) | `feat: admin area and audit log` |
+| S3a | Events | Source adapter interface and registry, USGS, BBC and Guardian RSS, simulated injector; admin event list and "simulate event" form | Real events appear in the admin list within 10 minutes; a simulated event carries the "simulated" label | AC9 (USGS, RSS, label), AC16, AC17 | `feat: event ingestion` |
+| S3b | Alerts and notifications page | Destinations (email, Slack config, masking), alert CRUD (disaster, news), matching, delivery rows, back-fill list, **Notifications** page (status `Pending`, nothing is sent yet) | Create an alert → simulate a matching event → it appears on the Notifications page | AC4, AC5, AC6, AC7, AC12 (alert part), AC13, AC14, AC18, AC21 | `feat: alerts and notifications page` |
+| S4 | Delivery | Delivery worker, MailKit → Mailpit, Slack webhook and mock receiver, retry; admin delivery log and Slack mock list; Notifications page shows `Sent` / `Failed` | Email in Mailpit, message in the Slack mock list, a `/fail` destination ends `Failed` after 3 attempts | AC1, AC9 ("SIMULATED" in the message), AC10, AC19, AC20 | `feat: email and Slack delivery` |
+| S5 | Market | CoinGecko, mock stocks, optional Finnhub, market rule with re-arm and steps | A market alert notifies at the documented points of the §2.4 example (simulated moves) | AC8, AC9 (CoinGecko parsing) | `feat: market movements` |
+| S6 | Hardening | Three "how to add" guides, the AC11 `grep` check, clean-clone run | `docker compose up` on a clean clone with only `.env.example` copied | AC11, AC15 | `docs: extension guides` |
+
+## How every slice runs
 
 1. 5–10 line plan → my approval
-2. Implementation
+2. Implementation, including the slice's automated tests
 3. Review of the diff with [`prompts/templates/review.md`](../prompts/templates/review.md)
 4. Log entries for findings and decisions
-5. Commit after my approval
+5. Manual check steps listed by the AI → I run them in the browser
+6. Commit after my approval
 
 ## If time runs short
 

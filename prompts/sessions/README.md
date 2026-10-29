@@ -6,6 +6,7 @@
 | 01 | Claude Code | Phases 0–1: handoff reviewed against the task, repo skeleton, brainstorm (two runs), triage phase added | [`01-setup.md`](01-setup.md) (full transcript exported at the end of the project) |
 | 02 | Claude Code | Phase 1b: brainstorm triage, fact checks F1–F11, decisions D8–D13 | TODO: export |
 | 03 | Claude Code | Phase 2: spec draft, challenge review (fresh subagent), decisions D14–D16 | TODO: export |
+| 04 | Claude Code | Phase 3: vertical slices (D17), notifications page (D18), architecture and ADRs | TODO: export |
 
 ## Session 01 – prompts so far
 
@@ -30,3 +31,9 @@ Opening prompt (summary; attachment: phase 1b hand-over note): start the next ph
 Review prompt for the fresh subagent: [`templates/challenge.md`](../templates/challenge.md), plus checks for triage contradictions, flagged-value consistency and acceptance-criteria testability.
 
 Key user inputs: plan approved; market alerts must not be capped at one notification per day; asked for frequent polling and a brainstorm of options → D14; answers to four review questions → D14–D16.
+
+## Session 04 – prompts
+
+Opening prompt: "Let's plan phase 3." (in Hungarian).
+
+Key user inputs: rejected the first phase 3 plan and asked to split implementation into small slices, each checked by hand (suggested order: database + register/login + landing page; admin; notifications listed in the UI; Slack and email sending) → D17; clarified that "notifications" means what was sent by email or Slack, shown under a Notifications menu item → D18.

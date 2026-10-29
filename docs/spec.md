@@ -1,6 +1,6 @@
 # Specification
 
-- **Status:** revised after review (phase 2). The raw AI draft is commit `bf14840`; the diff to this version shows the changes. Review findings and decisions: [`process/log.md`](../process/log.md), entries from 2026-10-29 16:00 (review) and D14–D16.
+- **Status:** revised after review (phase 2). The raw AI draft is commit `bf14840`; the diff to this version shows the changes. Review findings and decisions: [`process/log.md`](../process/log.md), entries from 2026-10-29 16:00 (review) and D14–D16. Phase 3 added the Notifications page (D18: §2.12, AC21, cut item 6).
 - **Tool / model:** Claude Code, Claude Opus 5.5 (session 03); review by a fresh subagent with [`prompts/templates/challenge.md`](../prompts/templates/challenge.md).
 - **Inputs:** [`brief.md`](brief.md), [`brainstorm/03-triage.md`](brainstorm/03-triage.md) (final), [`../process/log.md`](../process/log.md) (D1–D16).
 - **Rule:** built only from triage rows with the final verdict *accept*, plus the logged decisions D14–D16 taken during the spec review. Every statement cites its row (T…) or decision (D…). *Defer* rows appear only in §4 (out of scope). Facts that are not verified appear only in §8.
@@ -136,6 +136,13 @@ Append-only table: time, acting user, action, target type and ID, outcome. Actio
 
 Adding a type touches only the new files and one registration per side. No `switch` or `if` on channel, category or source type outside the registries (T59, T85). Each guide lists the exact files a new type adds and the one registration line it changes.
 
+### 2.12 Notifications page (D18, T81)
+
+- A **Notifications** menu item for the logged-in user lists the notifications created for **their own** alerts: time, alert name, event title (link to the source), destination (channel and display name), status (`Pending`, `Sent`, `Failed`). Newest first, paged.
+- It reads the same `Delivery` rows as the admin delivery log (§2.7); there is no separate table. One row per destination, so an event sent to email and Slack shows twice.
+- The last error text is not shown to the user (it may contain internal details); `Failed` is shown with a short generic reason. Webhook URLs stay masked (§2.6).
+- Another user's notifications are never listed; a detail request for another user's delivery ID returns 404 (§2.8).
+
 ## 3. MVP scope
 
 - Register, login, logout (own `/logout`, 10-minute access token)
@@ -145,6 +152,7 @@ Adding a type touches only the new files and one registration per side. No `swit
 - Matching at ingestion; no back-fill notifications; in-app list of up to 3 recent matches (disaster, news)
 - Delivery worker: email (MailKit → Mailpit), Slack (mock or real webhook), max 3 attempts, unique delivery index
 - Admin view: users and alerts, events, delivery log, Slack mock messages, audit log, simulate event
+- Notifications page: the user's own sent, pending and failed notifications (§2.12)
 - Audit log
 - Three extension points with three "how to add" guides
 - `docker compose up` runs Postgres, Mailpit, API and frontend
@@ -169,8 +177,7 @@ Each item is a *defer* row of the triage; the reason is in that row.
 | Encryption of webhook URLs at rest | T70 | Masking only in the MVP |
 | Retention of events and delivery history | T74 | Not in the brief |
 | One-click unsubscribe from a message | T77 | Needs signed tokens; the message links to the alert page |
-| User-facing delivery status, auto-pause of broken destinations | T79 | Admin sees failures |
-| User-facing notification history | T81 | Not asked |
+| Auto-pause of broken destinations | T79 | Admin sees failures; the user sees the `Failed` status on the Notifications page (§2.12) |
 
 ## 5. Acceptance criteria
 
@@ -178,7 +185,7 @@ Each item is a *defer* row of the triage; the reason is in that row.
 
 | # | Criterion | How |
 |---|---|---|
-| AC1 | End-to-end: admin simulates an event → a matching alert of a normal user with an email and a Slack destination → exactly one email in Mailpit and exactly one message in the Slack mock list | Manual (required); automated as well if the Mailpit API is verified in M3 (§8) |
+| AC1 | End-to-end: admin simulates an event → a matching alert of a normal user with an email and a Slack destination → exactly one email in Mailpit and exactly one message in the Slack mock list | Manual (required); automated as well if the Mailpit API is verified in S4 (§8) |
 | AC2 | Register, login and logout work; after logout, `/refresh` with the old refresh token returns 401; the configured access-token lifetime is 10 minutes | Test |
 | AC3 | A normal user gets 403 and an anonymous caller gets 401 on **every** admin endpoint; the test enumerates the admin routes from the app's endpoint list, so a new admin endpoint is covered without editing the test | Test |
 | AC4 | Reading, editing, deleting or linking another user's alert or destination by ID returns 404 and changes nothing | Test |
@@ -198,6 +205,7 @@ Each item is a *defer* row of the triage; the reason is in that row.
 | AC18 | No API response contains a full webhook URL (T70) | Test |
 | AC19 | A sample email and a sample Slack mock message show title, key value, source, link, why it matched and the category disclaimer (T76, T78) | Manual (screenshots in `process/screenshots/`) |
 | AC20 | Optional: one end-to-end run with a real Slack incoming webhook from my own workspace; screenshot in `process/screenshots/`. Not required from the reviewer | Manual, optional |
+| AC21 | Notifications page: a user's list contains exactly their own delivery rows (another user's rows never appear; another user's delivery ID returns 404); each row's status equals the status in the admin delivery log; no response contains a full webhook URL or the last error text | Test + manual |
 
 ## 6. Cut list (only if time runs short, in this order)
 
@@ -208,9 +216,10 @@ Cutting an item also drops the acceptance criteria that depend on it (named belo
 3. CI workflow
 4. Finnhub adapter (mock stocks stay; CoinGecko stays real)
 5. Delivery log filters and details (the log itself stays)
-6. In-app back-fill list (D11) — drops AC14
-7. Containerizing the apps: infrastructure stays in Compose, API and frontend start from the README — AC15 then covers the README steps
-8. Last resort, **only with my explicit approval:** all three categories come from a simulated source instead of real feeds. This **weakens** the brief's "something important happens **in the world**" (T13 rejected simulated-only for that phrase), so it would be recorded as a requirement weakened under time pressure, not as a cut inside the brief (D16)
+6. Notifications page (D18; not a brief requirement) — drops AC21
+7. In-app back-fill list (D11) — drops AC14
+8. Containerizing the apps: infrastructure stays in Compose, API and frontend start from the README — AC15 then covers the README steps
+9. Last resort, **only with my explicit approval:** all three categories come from a simulated source instead of real feeds. This **weakens** the brief's "something important happens **in the world**" (T13 rejected simulated-only for that phrase), so it would be recorded as a requirement weakened under time pressure, not as a cut inside the brief (D16)
 
 **Never cut:** user management (register, login, logout), alert CRUD, all three event categories, email and Slack, the three extension points and their guides, admin view, this spec, `process/log.md` with real entries, milestone commits, prompt history, a working end-to-end path.
 
@@ -227,17 +236,17 @@ Cutting an item also drops the acceptance criteria that depend on it (named belo
 - **Slack:** incoming webhook posts to one channel; no DMs (T63). The automated tests use the mock; a real webhook is exercised only in the optional AC20.
 - **No retention policy** (T74).
 
-## 8. Unverified facts (must be checked before the named milestone)
+## 8. Unverified facts (must be checked in the named slice, see `plan.md`)
 
 | Fact | Status | Check before |
 |---|---|---|
-| The bearer token from `MapIdentityApi` carries the role claim, so `[Authorize(Roles = "Admin")]` works | Unverified (CLAUDE.md risk list) | M1 (AC3) |
-| An endpoint filter on the `MapIdentityApi` route group can see the result of `/register` and `/login` and short-circuit unused paths | Unverified | M1 (fallback: own endpoints) |
-| Option name and effect for the 10-minute access-token lifetime | Partly verified (F8: 1 h default) | M1 (AC2) |
-| USGS publication delay relative to event time (does the 2 h window drop real quakes?) | Unverified | M2 |
-| CoinGecko keyless rate limit and monthly cap | Not published (F1) | M2 (live call; fall back to mock if blocked) |
-| Finnhub free per-minute limit | Unverified (F2) | M2 (real free key) |
-| Finnhub `dp` baseline (previous close?) | Unverified (F9) | M2 (live call vs. `pc`) |
-| Mailpit REST API paths (for an automated AC1) | Unverified (F11) | M3 |
-| Slack incoming webhook 4xx codes | Unverified (D13) | M3 |
+| The bearer token from `MapIdentityApi` carries the role claim, so `[Authorize(Roles = "Admin")]` works | Unverified (CLAUDE.md risk list) | S2 (AC3) |
+| An endpoint filter on the `MapIdentityApi` route group can see the result of `/register` and `/login` and short-circuit unused paths | Unverified | S1 (fallback: own endpoints) |
+| Option name and effect for the 10-minute access-token lifetime | Partly verified (F8: 1 h default) | S1 (AC2) |
+| USGS publication delay relative to event time (does the 2 h window drop real quakes?) | Unverified | S3a |
+| CoinGecko keyless rate limit and monthly cap | Not published (F1) | S5 (live call; fall back to mock if blocked) |
+| Finnhub free per-minute limit | Unverified (F2) | S5 (real free key) |
+| Finnhub `dp` baseline (previous close?) | Unverified (F9) | S5 (live call vs. `pc`) |
+| Mailpit REST API paths (for an automated AC1) | Unverified (F11) | S4 |
+| Slack incoming webhook 4xx codes | Unverified (D13) | S4 |
 | Terms of use of BBC, Guardian, CoinGecko, Finnhub | Not reviewed (T24) | Accepted as a known risk |

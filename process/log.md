@@ -268,3 +268,21 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: Item 8 came from my own skeleton and contradicts T13 ("in the world"). I want to keep it as a last resort, but not disguised as inside the brief. Real Slack is never exercised by any AC. The destination key is needed because T67 allows several destinations per channel.
 - What I did instead: Item 8 kept, reworded: only with my explicit approval, recorded as a weakened requirement. New optional manual AC20 (real webhook from my workspace, screenshot). Delivery unique key `(alert, event, destination)`. The other review findings were fixed in the revision without a separate decision: normal users have no role (no hook in `/register` needed), audit hooks via an endpoint filter (unverified, fallback own endpoints), unused Identity endpoints return 404, `activeSince` for edit/re-enable, soft-deleted destinations, mock routes `/hooks/{name}`, `/fail`, `/reject`, `Retry-After` cap 5 min, sharpened ACs (AC2–AC11) and new AC16–AC19 for T9/T31, T26, T70, T76/T78, cut items name the ACs they drop, §7 and §8 extended.
 - How I verified: Diff `bf14840..` on `docs/spec.md`; the coverage script re-run on the revised spec.
+
+---
+
+## Phase 3 – architecture and slices (Claude Code session 04)
+
+### [2026-10-29 14:59] D17 – Vertical slices instead of layered milestones
+- Type: course-correction
+- What the AI proposed / generated: The phase 3 plan kept the layered milestones of `docs/plan.md`: M1 skeleton and auth, M2 events and alerts, M3 delivery, M4 the whole Angular frontend, then a separate test phase. Principle 4 said "the UI comes last because it only consumes the API".
+- What was wrong with it / what I weighed: With that order nothing can be checked in the browser until M4, and the tests come after all the code. I want to check every piece of work by hand before it is committed. My suggested order: database + register/login + landing page, then admin, then a notifications list in the UI, then email and Slack sending.
+- What I did instead: Seven slices S1–S6 (S3 split into events and alerts) in [`docs/plan.md`](../docs/plan.md), each with backend, frontend, its own tests, a manual check and the ACs it closes. Principle 4 rewritten. The spec's §8 "check before" column now names slices instead of milestones.
+- How I verified: Script over the slice table: every AC1–AC21 is assigned to at least one slice; AC9 and AC12 are split on purpose (named parts).
+
+### [2026-10-29 14:59] D18 – Notifications page is in scope (T81)
+- Type: decision
+- What the AI proposed / generated: Spec §4: "user-facing notification history" (T81) and "user-facing delivery status" (T79) out of scope ("not asked"). When I asked for a notifications list in slice 3, the AI first asked whether I meant the user's alerts, the ingested events or the sent notifications.
+- What was wrong with it / what I weighed: I meant the sent notifications: what went out by email or Slack must also be visible in the app under a Notifications menu item. Not a brief requirement, but it makes each slice checkable in the UI before delivery exists (S3b shows `Pending`, S4 turns it into `Sent` / `Failed`).
+- What I did instead: Spec §2.12 (reads the same `Delivery` rows, own rows only, no last-error text, masked URLs), §3 scope line, T81 removed from §4, T79 narrowed to auto-pause, new AC21, new cut item 6 (dropping AC21). This is a scope addition, not a cut; rule 6 is unaffected.
+- How I verified: Diff on `docs/spec.md`; AC21 assigned to S3b in the slice table.
