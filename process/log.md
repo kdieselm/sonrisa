@@ -153,3 +153,69 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: Rejecting every keyed API leaves stocks without a real source. The real constraint is quota, not the key: Alpha Vantage's 25 requests/day (F3) runs out within the first half hour of testing; a source with a large free quota is fine if its key is optional. I asked whether any free stock API allows more. Checked: Finnhub `/quote` is a free endpoint with a percent-change field (`dp`) (F9); Twelve Data allows 8/min and 800/day (F9), too little for polling every minute; FMP and Massive/Polygon could not be verified.
 - What I did instead: Rule: a source is rejected if its free quota would run out during normal testing. Alpha Vantage and Twelve Data out. Stocks: Finnhub when `FINNHUB_API_KEY` is set, otherwise a mock stock source (labeled simulated); crypto: CoinGecko keyless. The reviewer still needs no key. Applied to `03-triage.md` before the raw-proposal commit at my request, so the raw commit already contains this decision; this entry is the record of the change.
 - How I verified: F9 (official Finnhub docs JSON for `/quote`: `premium: null`, `dp` = "Percent change"; Twelve Data pricing page). Finnhub's free per-minute limit is still unverified; to be checked with a real free key before M2.
+
+### [2026-10-29 14:00] D9 – Triage decisions on the flagged rows and the top-5
+- Type: decision
+- What the AI proposed / generated: Raw triage proposal (commit `fde6aa9`): flagged rows T2/T3, T34, T56, T57, one open "verify" row (T24) and a top-5 list.
+- What was wrong with it / what I weighed: Each flagged row either overrides the spec skeleton or the log, or rests on an unchecked premise. Decided one by one:
+  - **T2/T3 (overrides spec §1–§2):** the 0–100 severity score is dropped. It was the planning handoff's choice, and the first brainstorm run presented it as the balanced middle (the bias noted in phase 1). A score for news would be arbitrary. Alerts use per-category rules in native units: disaster = minimum magnitude + optional place text; market = asset + minimum % move; news = keywords.
+  - **T34 (answers spec §7):** no back-fill. An alert matches only events first seen after it was created; events published more than N hours before ingestion are never notified.
+  - **T56:** standalone app; "product context" is not a top-5 decision (its argument came from our own prompt, see 13:17).
+  - **T57 (refines D5):** `/logout` updates the security stamp (refresh token → 401, F8); the access token lifetime goes down to about 10 minutes, and the spec states the remaining window. Per-request stamp validation rejected: extra work, no brief requirement.
+  - **T24:** feed terms of use not reviewed; accepted as a known risk (notifications carry only title, link and source name).
+  - **Top-5:** accepted as proposed, with the D8 market sources.
+- What I did instead: Applied to [`docs/brainstorm/03-triage.md`](../docs/brainstorm/03-triage.md), now final. Rows not discussed one by one keep the proposed verdict.
+- How I verified: Diff `fde6aa9..` on `03-triage.md` shows exactly these changes.
+
+### [2026-10-29 14:01] Triage – rejected and still-unverified points (for the spec)
+- Type: ai-review
+- What the AI proposed / generated: The two brainstorm runs (84 triage rows).
+- What was wrong with it / what I weighed: Points that do not reach the spec and facts that are still open.
+- What I did instead:
+  - **Rejected** (reason in the triage row): T1 filter-only importance, T2 0–100 score, T4 admin-curated importance, T5 source-decides model, T6 LLM/heuristic score, T8, T9 re-notify on revisions, T12 real-only, T13 simulated-only, T19 NewsAPI/GNews, T21a Alpha Vantage, T21b Twelve Data, T21c FMP/Massive, T28 broker, T29 batch matching, T30 push ingestion, T32 cross-source dedup, T39 digest-only, T45 management console, T46 editorial console, T47 tenant admin, T48 unauthenticated admin, T50 audit log, T52 teams, T54 stubbed identity, T59 channel-specific columns/branches, T61 runtime plugins, T62 outsourced notifications, T72 scale-out design, T83 global thresholds.
+  - **Still unverified, must not appear as fact in the spec:** CoinGecko keyless rate limit and monthly cap (F1); Finnhub free per-minute limit (F2) and the baseline of `dp` (F9); GDELT DOC API keyless use (F4, deferred anyway); FMP and Massive free quotas (F9); RSS/CoinGecko/Finnhub terms of use (T24); GDACS/EONET/NWS (T16, not checked, deferred).
+- How I verified: Cross-checked against the verdict column of `03-triage.md`.
+
+### [2026-10-29 14:20] D10 – Three extension points: channels, categories, sources
+- Type: decision
+- What the AI proposed / generated: Triage T11 (raw): fixed three categories, "only **channels** must be extensible", with channels read as notification channels; T58 channel interface; T61 runtime plugins rejected.
+- What was wrong with it / what I weighed: "add more channels later" is ambiguous: it can mean notification channels, event categories, or source APIs inside a category. The AI picked one reading without saying it was a choice. When asked what "extensible by the admin" should mean, I first put it that way myself, then corrected it: the admin does not need to add types; the system must be designed so that a new type is easy to integrate on the backend and the frontend.
+- What I did instead: New triage row T85: three code-level extension points (notification channel, event category, source adapter), each with a backend interface + one registration and a frontend registry, so a new type needs no change in shared code. T11 and T14 updated; T61 (runtime plugins, admin-added types) stays rejected. Three short "how to add" guides become deliverables.
+- How I verified: Phase 2 acceptance criterion to add: a review check that no `switch`/`if` on channel, category or source type exists outside the registries.
+
+### [2026-10-29 14:35] D11 – Limited in-app backfill for new alerts
+- Type: decision
+- What the AI proposed / generated: T34 (D9): no back-fill at all; a new alert only reacts to events first seen after its creation.
+- What was wrong with it / what I weighed: On a brand-new account nothing is visible until the world produces a matching event, so a reviewer cannot tell at first glance whether matching works. Asked for a small back-fill, only where earlier events are easy to get, with a limit. The AI checked per category: disaster (USGS `4.5_day` already holds the last 24 hours) and news (RSS items have a publish date) are easy; market is not (CoinGecko and Finnhub return only the current change, so past threshold crossings would need own price history). Two options: send the back-filled events as marked notifications, or only show them in the app.
+- What I did instead: In-app only. The alert page lists up to 3 already-ingested matching events from the last 24 hours, for disaster and news alerts; nothing is sent and no delivery rows are created. Notifications keep the D9 rule. T10 (preview) is accepted in this limited form.
+- How I verified: To be covered by tests in M2 (list limit and window, no delivery rows, empty for market).
+
+### [2026-10-29 14:50] D12 – Audit log is in scope
+- Type: decision
+- What the AI proposed / generated: Triage T50: reject the audit log ("not in the brief").
+- What was wrong with it / what I weighed: The brief does not require it, but an admin view without a record of who changed what is thin, and it is cheap if written in one place. It also makes the auth tests (login, logout) visible in the UI.
+- What I did instead: Accepted. Append-only audit table (time, acting user, action, target type and ID, outcome) for register, login success and failure, logout, alert and destination changes, and the admin "simulate event"; no secrets in entries; read-only list in the admin view. The AI proposed this scope; the spec places it in the cut list.
+- How I verified: Tests planned for M1/M2: one entry per alert change and per logout; 403 for normal users on the audit endpoint; no webhook URL in any entry.
+
+### [2026-10-29 15:05] Check – email and Slack mechanics (F10, F11)
+- Type: check
+- What the AI proposed / generated: Triage T63–T65: Slack incoming webhook with a local mock receiver, SMTP to Mailpit.
+- What was wrong with it / what I weighed: Before explaining the design, checked the two facts it rests on.
+- What I did instead:
+  - **F10 – SMTP client in .NET 10:** the official `SmtpClient` docs say "We don't recommend that you use the `SmtpClient` class for new development because `SmtpClient` doesn't support many modern protocols. Use MailKit or other libraries instead." It still works for plain SMTP to Mailpit. Choice between the built-in class (no new package) and MailKit (new NuGet package, needs approval under rule 4) is open. Source: https://learn.microsoft.com/en-us/dotnet/api/system.net.mail.smtpclient?view=net-10.0
+  - **F11 – Mailpit:** official image `axllent/mailpit`, SMTP on 1025, web UI on 8025 by default; a REST API (v1) exists, its exact paths are **unverified**. Source: https://mailpit.axllent.org/docs/install/docker/
+- How I verified: Official documentation pages, read on 2026-10-29.
+
+### [2026-10-29 15:15] D13 – MailKit for SMTP; Slack error policy
+- Type: decision
+- What the AI proposed / generated: Explanation of the email and Slack mechanics (triage T63–T65): delivery rows, worker, registry; Mailpit as SMTP catcher; Slack incoming webhook with a local mock receiver that stores messages; two open choices.
+- What was wrong with it / what I weighed: (1) The built-in `SmtpClient` needs no package, but Microsoft advises against it for new development (F10). (2) Retrying every Slack error wastes attempts on a broken webhook.
+- What I did instead: **MailKit approved** as a new NuGet package (rule 4). Slack: 429, 5xx and timeouts are retried (respecting `Retry-After`); any other 4xx fails at once. The mock's `/mock/slack/fail` returns 500 so the retry path stays testable.
+- How I verified: MailKit exists and is maintained: NuGet registration shows 4.18.2, published 2026-10-23 by Jeffrey Stedfast, with a `net10.0` target (https://www.nuget.org/packages/MailKit). Slack's exact 4xx codes are unverified; check before M3.
+
+### [2026-10-29 15:25] Course-correction – every triage row reviewed, not only the flagged ones
+- Type: course-correction
+- What the AI proposed / generated: After the flagged rows and the top-5 were decided (D9), the AI proposed to commit, with the note that the other rows "keep the proposed verdict: the user reviewed the raw table and raised no objection".
+- What was wrong with it / what I weighed: That note treated silence as approval for about 80 rows. Unflagged rows can still carry a wrong interpretation; T11 did (it silently read "channels" as notification channels only).
+- What I did instead: Went through all rows in batches of ten. Changes: D10 (three extension points), D11 (limited in-app backfill), D12 (audit log), D13 (MailKit, Slack error policy). The status line of `03-triage.md` now says so.
+- How I verified: Each batch was confirmed explicitly in the conversation; the diff from `fde6aa9` shows every change.
