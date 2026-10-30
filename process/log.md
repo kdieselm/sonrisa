@@ -825,3 +825,17 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: Nothing; the S5/S6 app-side fixes had been covered by `dotnet test` only until they were committed.
 - What I did instead: No change. PASSED: web and seeded admin login, `GET /api/admin/events` 200, 2 `Sent` rows, exactly 1 email in Mailpit, exactly 1 Slack mock message, sources polled; no `sonrisa-clean` container or image left.
 - How I verified: the script output; `docker ps -a` and `docker images` filtered on `sonrisa-clean`.
+
+### [2026-10-30 02:28] Check – final check against the brief and the own plan
+- Type: check
+- What the AI proposed / generated: A pass over every phrase of `docs/brief.md`, the deliverables of `docs/plan.md`, the acceptance criteria and the open facts of `docs/spec.md`, the risk points of `CLAUDE.md`, and the TODOs left in the repository.
+- What was wrong with it / what I weighed: All product requirements of the brief are covered (spec §1); the process requirements too. Open: (1) "your prompt history — all prompts": the claude.ai planning conversation (session 00) is not exported; (2) `process/screenshots/` was empty although the README linked it and AC19/AC20 named it; (3) the USGS publication delay (spec §8, due in S3a) was never checked; (4) two §8 rows still said the AC2 runtime check had not run "(no Docker)"; (5) no recorded browser check for S5 and S6 (plan principle 4); (6) the CI result of the last push was unknown.
+- What I did instead: (2) Screenshots dropped: the folder and the README row removed; AC19 is checked by tests (`ChannelSendTests` asserts every field in the email and the Slack text, `DescribeTests` that each category fills them, the AC1 integration test the delivered messages); AC20 records its result in this log. (3) Measured, next entry. (4) Rows updated with the tests that run them; the Mailpit row also names the search call the clean-clone script uses. (5) I checked S5 and S6 in the browser after the phase Z fixes; README updated. (6) I reported the CI run of `7c8a098` as green; README updated. (1) stays open: the export is mine to do.
+- How I verified: `git grep` for TODO and screenshot after the changes; `origin/main` = `7c8a098`.
+
+### [2026-10-30 02:28] Check – USGS publication delay (spec §8, late: it was due in S3a)
+- Type: check
+- What the AI proposed / generated: Measure the delay from the dev database: for USGS events, `FirstSeenAt − PublishedAt` (the poll runs every minute), leaving out the 22 events of the first poll at 18:51 (the day backlog of the `4.5_day` feed).
+- What was wrong with it / what I weighed: 6 events arrived while the API was running: 14, 23, 18, 70, 95 and 54 min (median 38). None over the 2 h age limit, so none was dropped. The 70 min one may be inflated: the API container was restarted at 23:07 and the event was first seen at 23:10. The 95 min one (M 4.6 near Shikotan) was first seen 40 min after that restart, so it is real. 6 events is a small sample, and 95 min is close to 120.
+- What I did instead: §8 row filled in with the numbers; a new known limit in §7 (a quake published more than 2 h late is not matched). The 2 h limit is not changed.
+- How I verified: two SQL queries on the `Events` table in `sonrisa-db-1`; `docker inspect sonrisa-api-1` for the restart time.

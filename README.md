@@ -90,8 +90,8 @@ I treated the brief as a requirements problem first and a coding problem second.
 
 - **Facts against sources:** package existence and maintenance, framework behaviour (the role claim in the bearer token, read in the framework source), feed URLs and formats against live responses, recorded as test fixtures. AI summaries of documentation were checked too: one misreported a USGS field that the live feed has.
 - **Tests that can fail:** from S2 on, after a slice's tests passed, the code was broken on purpose (mutation check) to see them fail. Each of the seven generated migrations was read; one (`DeliveryRowVersion`) tried to add the PostgreSQL system column `xmin` and was emptied by hand.
-- **Real infrastructure:** integration tests on PostgreSQL with Testcontainers (two bugs showed only there: time precision, and an EF Core query that could not be translated), CI on GitHub Actions, and [scripts/clean-clone-check.sh](scripts/clean-clone-check.sh), which runs the whole stack from the committed state with only `.env.example`.
-- **My checks of the running app:** confirmed in chat for S1, S2 and S3b; in S3a and S4 what I saw led to changes (too much BBC news → D26; a wrong text on the account page). For S5 and S6 the transcripts show my approval of the commit, not a recorded browser check.
+- **Real infrastructure:** integration tests on PostgreSQL with Testcontainers (two bugs showed only there: time precision, and an EF Core query that could not be translated), CI on GitHub Actions (green on the last pushed commit, `7c8a098`), and [scripts/clean-clone-check.sh](scripts/clean-clone-check.sh), which runs the whole stack from the committed state with only `.env.example`.
+- **My checks of the running app:** confirmed in chat for S1, S2 and S3b; in S3a and S4 what I saw led to changes (too much BBC news → D26; a wrong text on the account page). For S5 and S6 the transcripts show only my approval of the commit, so I checked both in the browser again in phase Z, after the review fixes.
 
 ### The most important corrections
 
@@ -125,7 +125,6 @@ Details of every decision, check and finding: [process/log.md](process/log.md). 
 | Architecture and ADRs | [docs/architecture.md](docs/architecture.md) |
 | Raw brainstorm output | [docs/brainstorm/](docs/brainstorm/) |
 | Decision and AI-review log | [process/log.md](process/log.md) |
-| Screenshots | [process/screenshots/](process/screenshots/) |
 | Prompts and templates | [prompts/](prompts/) |
 | Session transcripts | [prompts/sessions/](prompts/sessions/) |
 | Rules for the AI agent | [CLAUDE.md](CLAUDE.md) |
