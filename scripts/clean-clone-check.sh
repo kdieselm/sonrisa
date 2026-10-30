@@ -5,8 +5,9 @@
 # volume). Uncommitted changes are NOT part of the check.
 #
 # Usage:  bash scripts/clean-clone-check.sh
-# Needs:  docker (running), git, curl. Uses its own Compose project and the host ports below, so a running dev stack
-#         on the default ports is not touched.
+# Needs:  docker (running), git, curl, awk. Uses its own Compose project and the host ports below, so a running dev
+#         stack on the default ports is not touched. The default ports of .env.example are therefore not tested here: a
+#         clash with a local service on 5432, 8080, 5080 or 8025 would show only in a real "docker compose up".
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,13 +20,20 @@ MAILPIT="http://localhost:${MAILPIT_UI_PORT}"
 STEP=0
 FAILED=0
 
+# Every request has a time limit, so a port that accepts but never answers cannot hang the script.
+curl() { command curl --max-time 15 "$@"; }
+
 say()  { printf '\n== %s\n' "$*"; }
 ok()   { printf '   ok: %s\n' "$*"; }
 fail() { printf '   FAIL: %s\n' "$*"; FAILED=1; }
 
 cleanup() {
   say "Tearing down"
-  (cd "$WORK/clone" 2>/dev/null && docker compose -p "$PROJECT" down -v --remove-orphans >/dev/null 2>&1)
+  if [ -d "$WORK/clone" ]; then
+    if ! (cd "$WORK/clone" && docker compose -p "$PROJECT" down -v --remove-orphans --rmi local >/dev/null 2>&1); then
+      printf '   WARNING: teardown failed; check: docker compose -p %s ps -a\n' "$PROJECT"
+    fi
+  fi
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -61,6 +69,8 @@ WEB_PORT="${PORTS[0]}"; API_PORT="${PORTS[1]}"; POSTGRES_PORT="${PORTS[2]}"; MAI
 export WEB_PORT API_PORT POSTGRES_PORT MAILPIT_UI_PORT
 
 say "docker compose up --build"
+# A run that was killed (no trap) can leave this project's volume behind; start from nothing.
+docker compose -p "$PROJECT" down -v --remove-orphans >/dev/null 2>&1
 docker compose -p "$PROJECT" up --build -d || die "docker compose up failed"
 
 say "Waiting for the stack"
@@ -107,10 +117,13 @@ for _ in $(seq 1 30); do [ "$(sent_count)" -ge 2 ] && break; sleep 2; done
 mails=$(curl -fsS "$MAILPIT/api/v1/search?query=$(printf '%s' "to:$EMAIL")" | grep -oE '"messages_count":[0-9]+' | cut -d: -f2)
 [ "${mails:-0}" = 1 ] && ok "Mailpit holds exactly 1 email for $EMAIL" || fail "Mailpit emails for $EMAIL: ${mails:-none}"
 
-slack=$(curl -fsS "$WEB/api/admin/slack-mock?pageSize=50" -H "Authorization: Bearer $ADMIN" | grep -c "$WORD")
-[ "$slack" -ge 1 ] && ok "Slack mock list holds the message" || fail "Slack mock list has no message with the keyword"
+# Count messages, not lines: the list is one JSON line, one object per message starting with {"id":.
+slack=$(curl -fsS "$WEB/api/admin/slack-mock?pageSize=50" -H "Authorization: Bearer $ADMIN" \
+  | awk -v w="$WORD" 'BEGIN { RS = "[{]\"id\":" } index($0, w) { n++ } END { print n + 0 }')
+[ "$slack" -eq 1 ] && ok "Slack mock list holds exactly 1 message with the keyword" \
+  || fail "Slack mock messages with the keyword: $slack (expected 1)"
 
-say "Sources (no errors in the API log)"
+say "Sources are polled (the poller started; feed results are not checked here)"
 if docker compose -p "$PROJECT" logs api 2>&1 | grep -E 'Polling [0-9]+ sources' >/dev/null; then ok "sources are polled"; else fail "no polling line in the API log"; fi
 
 echo

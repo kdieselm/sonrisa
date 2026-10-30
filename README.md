@@ -48,7 +48,7 @@ Any other account is made with **Register** in the app and is a normal user.
 2. Log in as the demo user. **Alerts** → new alert: category *Breaking news*, keyword `reviewer`, both destinations.
 3. In a private window, log in as the admin → **Simulate event** → *Breaking news*, title `Reviewer test`. (Or use *Market movement* / *Natural disaster* with a matching alert.)
 4. As the demo user, **Notifications** shows the message once per destination, `Pending` then `Sent`.
-5. Mailpit (http://localhost:8025) holds exactly one email; the admin **Slack mock** list holds the Slack message. Both say **SIMULATED**.
+5. Mailpit (http://localhost:8025) holds exactly one email titled `Reviewer test`; the admin **Slack mock** list holds the Slack message. Both say **SIMULATED**. (The demo user also has a disaster alert for magnitude 5 and above, so a real earthquake can add other emails to the same inbox.)
 6. The admin area also shows events (real USGS, Guardian/BBC, CoinGecko and mock-stock events appear within minutes), the delivery log and the audit log.
 
 ## Checks
@@ -56,16 +56,16 @@ Any other account is made with **Register** in the app and is a normal user.
 | Check | Command | Expected |
 |---|---|---|
 | Tests (needs Docker for PostgreSQL via Testcontainers) | `dotnet test --solution src/backend/Sonrisa.slnx` | all green |
-| Clean clone (AC15): clones the **committed** state, copies only `.env.example`, runs the end-to-end path of AC1 on its own ports, tears down | `bash scripts/clean-clone-check.sh` | `CLEAN-CLONE CHECK: PASSED` |
+| Clean clone (AC15): clones the **committed** state, copies only `.env.example`, runs the end-to-end path of AC1 on its own ports (so the default ports are not part of this check), tears down; needs bash (Git Bash on Windows) | `bash scripts/clean-clone-check.sh` | `CLEAN-CLONE CHECK: PASSED` |
 | No `switch`/`if` on channel, category or source keys outside the registries (AC11) | see below | only the ten `const string …Key = "…"` definition lines |
 
-AC11 by hand (the automated version is `RegistryBoundaryTests`, which also checks the frontend):
+AC11 by hand, in bash (Git Bash on Windows; the brace expansion does not work in PowerShell). The grep finds key *literals* only; `RegistryBoundaryTests` also finds comparisons, `case` and switch arms on the key *constants* (`SlackChannel.ChannelKey`), takes the key list from the real registrations (so config keys such as `world-news` count), and checks the frontend `.ts` and `.html` files:
 
 ```bash
 grep -rnE '"(disaster|news|market|email|slack|usgs|world-news|coingecko|finnhub|mock-stocks|simulated)"' src/backend --include=*.cs --exclude-dir={obj,bin,Migrations,Sonrisa.Tests}
 ```
 
-A key literal anywhere else is a violation. Each "how to add" guide ([channel](docs/how-to/add-a-channel.md), [category](docs/how-to/add-a-category.md), [source](docs/how-to/add-a-source.md)) lists the files a new type adds and the one registration line it changes; `GuidePathTests` fails if a guide names a file that does not exist.
+A key literal anywhere else is a violation. Each "how to add" guide ([channel](docs/how-to/add-a-channel.md), [category](docs/how-to/add-a-category.md), [source](docs/how-to/add-a-source.md)) lists the files a new type adds and the one registration line it changes; `GuidePathTests` fails if a guide names a file, folder or test that does not exist.
 
 ## How I worked
 

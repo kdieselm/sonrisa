@@ -26,6 +26,12 @@ public sealed class FakeSmtpServer : IAsyncDisposable
     /// <summary>The server's answer to RCPT TO; a 4xx or 5xx refuses the recipient.</summary>
     public string RcptReply { get; set; } = "250 OK";
 
+    /// <summary>
+    /// Answers to RCPT TO used once each, in order, before <see cref="RcptReply"/>: "451 once, then 250" without the
+    /// test racing the worker to switch the reply (S6 review M4).
+    /// </summary>
+    public System.Collections.Concurrent.ConcurrentQueue<string> RcptRepliesOnce { get; } = new();
+
     /// <summary>After accepting a message the server goes silent: it never answers QUIT.</summary>
     public bool DropAfterData { get; set; }
 
@@ -81,7 +87,7 @@ public sealed class FakeSmtpServer : IAsyncDisposable
                     else if (command.StartsWith("RCPT TO"))
                     {
                         to = line[(line.IndexOf('<') + 1)..line.IndexOf('>')];
-                        await writer.WriteLineAsync(RcptReply);
+                        await writer.WriteLineAsync(RcptRepliesOnce.TryDequeue(out var once) ? once : RcptReply);
                     }
                     else if (command == "DATA")
                     {

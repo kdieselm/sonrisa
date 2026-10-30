@@ -17,5 +17,9 @@ public sealed record MarketRule(string Asset, string Direction, double Threshold
 /// <summary>Armed state and last notified level of one direction (spec §2.4).</summary>
 public sealed record MarketSide(bool Armed, double? LastLevel);
 
-/// <summary>The state of a market alert, stored in <c>AlertStates.State</c>. A side that is null is armed.</summary>
-public sealed record MarketState(MarketSide? Up, MarketSide? Down);
+/// <summary>
+/// The state of a market alert, stored in <c>AlertStates.State</c>. A side that is null is armed.
+/// <paramref name="StartPending"/>: the alert became active when no value of its asset had been observed yet, so the
+/// start state is decided by the previous value carried in the first event (S5 review finding 2).
+/// </summary>
+public sealed record MarketState(MarketSide? Up, MarketSide? Down, bool StartPending = false);

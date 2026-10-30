@@ -14,15 +14,22 @@ public static class MarketLogic
 
     private const double Epsilon = 1e-9;
 
-    public static bool CrossedGrid(double previous, double current) =>
-        Math.Floor(previous / Grid + Epsilon) != Math.Floor(current / Grid + Epsilon);
+    public static bool CrossedGrid(double previous, double current) => Cell(previous) != Cell(current);
+
+    /// <summary>
+    /// Grid cell of a value, symmetric around zero: a value exactly on a line belongs to the cell away from zero, so
+    /// -5.0 counts as having reached -5 just as 5.0 counts as having reached 5 (S5 review finding 1).
+    /// </summary>
+    private static double Cell(double value) =>
+        value >= 0 ? Math.Floor(value / Grid + Epsilon) : -Math.Floor(-value / Grid + Epsilon);
 
     public static bool IsMultipleOfGrid(double value) =>
         Math.Abs(value / Grid - Math.Round(value / Grid)) < Epsilon;
 
     /// <summary>
     /// Start state when an alert becomes active (spec §2.4): disarmed if the latest value is already past the
-    /// threshold, so only a new crossing notifies; armed otherwise or when nothing was observed yet.
+    /// threshold, so only a new crossing notifies; armed otherwise or when nothing was observed yet (callers that have no
+    /// observation keep the start pending instead, see <c>MarketCategory.InitialState</c>).
     /// </summary>
     public static MarketSide Start(double? latest, double threshold, double? step) =>
         latest is { } value && value >= threshold - Epsilon

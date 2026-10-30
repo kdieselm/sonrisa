@@ -25,6 +25,9 @@ public sealed class SourceHttpClient : IDisposable
         Http.DefaultRequestHeaders.UserAgent.ParseAdd("Sonrisa/0.1 (+demo alert app)");
     }
 
+    /// <summary>For tests: the sources' HTTP paths (status codes, error bodies) driven by a fake handler.</summary>
+    public SourceHttpClient(HttpMessageHandler handler) => Http = new HttpClient(handler);
+
     public HttpClient Http { get; }
 
     public void Dispose() => Http.Dispose();

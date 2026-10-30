@@ -2,7 +2,7 @@
 
 A **notification channel** is a way to deliver a notification: email, Slack, later for example a generic webhook or SMS (spec §2.6, §2.11). The brief asks for a system "flexible enough that we can add more channels later". A channel owns the shape of a destination's config: it validates it, fills in defaults, and decides what of it may leave the API. It also turns the channel-neutral `NotificationContent` into its own message and sends it. Core code never names a channel: it finds one through the registry by key (ADR-2, AC11).
 
-- **Status:** S6. Config, validation, defaults, masking, the destination form, formatting and sending (`Format`, `SendAsync`) are complete. Dry-run in S6 (`process/log.md`): a throwaway `console` channel built from this guide alone took **2 new files** (one backend class, one frontend file), **2 registration lines** (one per side) and **1 test update** (the catalog test that lists the channels, see the checklist); backend and frontend built and all other 311 tests passed.
+- **Status:** S6. Config, validation, defaults, masking, the destination form, formatting and sending (`Format`, `SendAsync`) are complete. Dry-run in S6 (`process/log.md`): a throwaway `console` channel built from this guide alone took **2 new files** (one backend class, one frontend file), **2 registration lines** (one per side) and **1 test update** (the catalog test that lists the channels, see the checklist); backend and frontend built; of the 312 tests, 310 passed and 2 failed: the catalog test named above and a flaky delivery test unrelated to the channel (fixed in S6, see the log).
 - **Worked example:** `slack` (the config holds a secret, so it is masked). `email` is the smallest one.
 
 ## What you add

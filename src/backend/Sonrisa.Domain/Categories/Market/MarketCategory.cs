@@ -131,6 +131,12 @@ public sealed class MarketCategory(MarketAssetCatalog assets) : IEventCategory
         }
 
         var state = stateJson is null ? new MarketState(null, null) : DeserializeState(stateJson);
+        var stored = state;
+        if (state.StartPending)
+        {
+            state = StartState(rule, data.PreviousChangePercent);
+        }
+
         var fired = false;
         var up = state.Up;
         var down = state.Down;
@@ -151,17 +157,24 @@ public sealed class MarketCategory(MarketAssetCatalog assets) : IEventCategory
         }
 
         var next = new MarketState(up, down);
-        return new MatchOutcome(fired, next == state ? null : Serialize(next));
+        return new MatchOutcome(fired, next == stored ? null : Serialize(next));
     }
 
+    /// <summary>
+    /// Start state from the latest observed value (spec §2.4). With no observation yet (after a restart, or while the
+    /// provider fails) the start is left pending instead of armed, so a move already past the threshold cannot notify.
+    /// </summary>
     public string? InitialState(string ruleJson, IObservationStore observations)
     {
         var rule = DeserializeRule(ruleJson);
-        var latest = observations.Latest(rule.Asset);
-        return Serialize(new MarketState(
-            Watches(rule, up: true) ? MarketLogic.Start(latest, rule.ThresholdPercent, rule.StepPercent) : null,
-            Watches(rule, up: false) ? MarketLogic.Start(-latest, rule.ThresholdPercent, rule.StepPercent) : null));
+        return observations.Latest(rule.Asset) is { } latest
+            ? Serialize(StartState(rule, latest))
+            : Serialize(new MarketState(null, null, StartPending: true));
     }
+
+    private static MarketState StartState(MarketRule rule, double latest) => new(
+        Watches(rule, up: true) ? MarketLogic.Start(latest, rule.ThresholdPercent, rule.StepPercent) : null,
+        Watches(rule, up: false) ? MarketLogic.Start(-latest, rule.ThresholdPercent, rule.StepPercent) : null);
 
     public NotificationContent Describe(Event item, Alert alert)
     {

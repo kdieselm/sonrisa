@@ -36,6 +36,14 @@ public sealed class CoinGeckoSource(
         using var response = await http.Http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
         var readings = Parse(await response.Content.ReadAsStringAsync(ct), assets);
+        if (readings.Count == 0 && assets.Count > 0)
+        {
+            // An error object with status 200, or asset keys that do not exist: a failed poll in the log, not a
+            // silent "0 items" (S5 review finding 6).
+            throw new FormatException(
+                $"CoinGecko: the response holds none of the {assets.Count} configured assets.");
+        }
+
         return movements.Record(readings, Baseline, asset => $"https://www.coingecko.com/en/coins/{asset.Key}");
     }
 

@@ -99,11 +99,34 @@ public sealed class MarketCategoryTests
     }
 
     [Fact]
-    public void Without_an_observation_the_alert_starts_armed()
+    public void Without_an_observation_the_first_event_decides_the_start_and_a_move_under_way_does_not_notify()
     {
+        // S5 review finding 2: created while the provider failed and bitcoin sat at +7%. The first event (7.1 → 7.6)
+        // carries the previous value 7.1, which is already past 5, so the alert starts disarmed and stays silent.
         var rule = Rule("""{"asset":"bitcoin","direction":"up","thresholdPercent":5}""");
+        var state = Market.InitialState(rule, new Store(null));
+        Assert.True(MarketCategory.DeserializeState(state!).StartPending);
 
-        Assert.Equal([5.0], Fired(rule, null, 5.0, 5.5));
+        var first = Market.Evaluate(Move(7.6, previous: 7.1), rule, state);
+        Assert.False(first.Matched);
+        var after = MarketCategory.DeserializeState(first.NewStateJson!);
+        Assert.Equal(new MarketState(new MarketSide(false, 5), null), after);
+
+        // It notifies again only after a re-arm.
+        var rearmed = Market.Evaluate(Move(3.9, previous: 4.6), rule, first.NewStateJson);
+        Assert.True(Market.Evaluate(Move(5.1, previous: 3.9), rule, rearmed.NewStateJson).Matched);
+    }
+
+    [Fact]
+    public void Without_an_observation_a_first_event_that_crosses_the_threshold_notifies()
+    {
+        var rule = Rule("""{"asset":"bitcoin","direction":"down","thresholdPercent":5}""");
+        var state = Market.InitialState(rule, new Store(null));
+
+        var outcome = Market.Evaluate(Move(-5.0, previous: -4.9), rule, state);
+
+        Assert.True(outcome.Matched);
+        Assert.False(MarketCategory.DeserializeState(outcome.NewStateJson!).StartPending);
     }
 
     [Fact]
@@ -154,6 +177,14 @@ public sealed class MarketCategoryTests
     [InlineData(1.2, -0.1, true)]
     [InlineData(-0.4, -0.6, true)]
     [InlineData(-0.6, -0.9, false)]
+    // S5 review finding 1: an exact line counts as reached on both sides of zero.
+    [InlineData(4.9, 5.0, true)]
+    [InlineData(5.0, 4.6, true)]
+    [InlineData(-4.9, -5.0, true)]
+    [InlineData(-5.0, -4.6, true)]
+    [InlineData(-0.4, -0.5, true)]
+    [InlineData(-5.0, -5.4, false)]
+    [InlineData(5.0, 5.4, false)]
     public void The_grid_is_crossed_when_a_half_point_line_lies_between_the_two_values(double previous,
         double current, bool crossed) =>
         Assert.Equal(crossed, MarketLogic.CrossedGrid(previous, current));

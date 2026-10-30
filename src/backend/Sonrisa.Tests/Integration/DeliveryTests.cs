@@ -293,7 +293,7 @@ public sealed class DeliveryTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task An_email_the_smtp_server_defers_with_451_is_retried_until_it_goes_through()
     {
         Start(worker: true);
-        _smtp.RcptReply = "451 4.3.0 try again later";
+        _smtp.RcptRepliesOnce.Enqueue("451 4.3.0 try again later"); // first attempt deferred, then 250
         var (_, _, token) = await NewUserAsync();
         var admin = await _client.LoginAsAdminAsync();
         var inbox = await _client.CreateDestinationAsync(token, "email");
@@ -301,15 +301,12 @@ public sealed class DeliveryTests(PostgresFixture postgres) : IAsyncLifetime
         var alert = await _client.CreateAlertAsync(token, "news", new { keywords = new[] { word } }, [inbox.Id]);
 
         await _client.SimulateNewsAsync(admin.AccessToken, $"{word} happened");
-        // Attempts is saved before the send (write-ahead, S4 review), so wait for the outcome, not for the count.
-        var first = await WaitForAsync(alert.Id, r => r.Count == 1 && r[0].Attempts >= 1 && r[0].LastError is not null);
-        Assert.Equal(DeliveryStatus.Pending, first[0].Status);
-        Assert.Contains("451", first[0].LastError);
-
-        _smtp.RcptReply = "250 OK";
+        // The 451 is answered exactly once, so the outcome is fixed: one deferred attempt, one that goes through.
+        // (No check of the in-between Pending state: the retry after 150 ms can be faster than the test's poll.)
         var row = Assert.Single(await WaitForAsync(alert.Id, r => AllFinished(r, 1)));
         Assert.Equal(DeliveryStatus.Sent, row.Status);
-        Assert.True(row.Attempts is >= 2 and <= 3, $"attempts: {row.Attempts}");
+        Assert.Equal(2, row.Attempts);
+        Assert.Empty(_smtp.RcptRepliesOnce);
         Assert.Single(_smtp.Mails, m => m.Data.Contains(word, StringComparison.Ordinal)
                                         || MimeBody(m).Contains(word, StringComparison.Ordinal));
     }
