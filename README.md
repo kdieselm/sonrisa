@@ -73,44 +73,46 @@ A key literal anywhere else is a violation. Each "how to add" guide ([channel](d
 
 I treated the brief as a requirements problem first and a coding problem second. The work ran in phases, each with its own deliverable and commit ([docs/plan.md](docs/plan.md)):
 
-1. **Planning** (claude.ai): a first plan and a handoff file. The AI's first proposal scoped the brief down too far (seeded users, only two event sources); I rejected that (D1–D3).
-2. **Setup and brainstorm:** the handoff was checked line by line against the original task; the brainstorm ran twice, once in the planning context and once in a fresh subagent, to see how much the context biased it.
-3. **Triage:** every brainstorm point was accepted, changed or rejected in a table, with fact checks against official sources. Nothing reached the spec without passing the triage.
-4. **Spec and architecture:** requirements traceability, assumptions, acceptance criteria, a cut list, ADRs. Each was committed raw, attacked by a fresh subagent with [prompts/templates/challenge.md](prompts/templates/challenge.md), and committed again revised.
-5. **Implementation in vertical slices S1–S6** (D17): each slice was planned in 5–10 lines, approved, built with its tests, reviewed, checked by hand in the browser, and committed.
-6. **Wrap-up:** exported transcripts, late reviews, this section.
+1. **Planning** (claude.ai): a first plan and a handoff file. I dropped the full BMAD method (D1), and rejected two places where the AI scoped the brief down: seeded users instead of real accounts (D2), and two event sources instead of all three categories (D3).
+2. **Setup and brainstorm:** the handoff was checked line by line against the original task; it had turned "locally verifiable" into a requirement, which the task does not contain, so it is marked as my own addition in [docs/brief.md](docs/brief.md). The brainstorm ran twice, in the planning context and in a fresh subagent, to see how much that context biased it.
+3. **Triage:** every brainstorm point was accepted, changed or rejected in a table, with fact checks (F1–F11) against official sources and live data. Nothing reached the spec without passing the triage.
+4. **Spec and architecture:** requirements traceability, assumptions, acceptance criteria, a cut list, ADRs. Both were committed raw, attacked by a fresh subagent with [prompts/templates/challenge.md](prompts/templates/challenge.md), and committed again revised (`bf14840` → `2fbd5d3`, `bc48dae` → `849cebb`).
+5. **Implementation in vertical slices S1–S6** (D17): each slice was planned in plan mode, approved by me (four plan proposals first went back with my objections or questions), built with its tests, reviewed and committed after my approval.
+6. **Wrap-up:** exported transcripts, the late fresh reviews of S5 and S6 and their fixes, this section.
 
 ### How the AI was used
 
-- One Claude Code session per phase or slice, driven by [CLAUDE.md](CLAUDE.md): plan before code, no unapproved packages, log decisions when they happen, commit only after my approval.
-- **Fresh subagents as reviewers**, with no history of the work: the second brainstorm, the spec and architecture challenges, and the diff review of every slice ([prompts/templates/review.md](prompts/templates/review.md)).
-- The AI wrote the code and the tests; I approved or rejected plans, decided the open questions, and ran the manual checks.
+- Roughly one Claude Code session per phase or slice ([prompts/sessions/](prompts/sessions/)), driven by [CLAUDE.md](CLAUDE.md): plan before code, no unapproved packages, log decisions when they happen, commit only after my approval.
+- **Fresh subagents as reviewers**, with no history of the work: the second brainstorm, the spec and architecture challenges, and the diff reviews of S1–S4 before their commits ([prompts/templates/review.md](prompts/templates/review.md)); S5 and S6 only after theirs (see below).
+- The AI wrote the code and the tests. I approved or rejected the plans, decided the open questions, and checked the running app.
 
 ### How the output was checked
 
-- **Facts against sources:** package existence and maintenance, framework behaviour (role claim in the token, Identity endpoints), feed URLs and formats against live responses, recorded as fixtures.
-- **Tests that can fail:** after each slice's tests passed, the code was broken on purpose (mutation check) to see the tests fail. Every generated migration was read.
-- **Real infrastructure:** integration tests on PostgreSQL with Testcontainers; CI on GitHub Actions; a clean-clone script that runs the whole stack from the committed state.
-- **Manual check** in the browser at the end of every slice.
+- **Facts against sources:** package existence and maintenance, framework behaviour (the role claim in the bearer token, read in the framework source), feed URLs and formats against live responses, recorded as test fixtures. AI summaries of documentation were checked too: one misreported a USGS field that the live feed has.
+- **Tests that can fail:** from S2 on, after a slice's tests passed, the code was broken on purpose (mutation check) to see them fail. Each of the seven generated migrations was read; one (`DeliveryRowVersion`) tried to add the PostgreSQL system column `xmin` and was emptied by hand.
+- **Real infrastructure:** integration tests on PostgreSQL with Testcontainers (two bugs showed only there: time precision, and an EF Core query that could not be translated), CI on GitHub Actions, and [scripts/clean-clone-check.sh](scripts/clean-clone-check.sh), which runs the whole stack from the committed state with only `.env.example`.
+- **My checks of the running app:** confirmed in chat for S1, S2 and S3b; in S3a and S4 what I saw led to changes (too much BBC news → D26; a wrong text on the account page). For S5 and S6 the transcripts show my approval of the commit, not a recorded browser check.
 
 ### The most important corrections
 
 | What the AI did | What was wrong | What changed |
 |---|---|---|
 | Planned seeded users and a "login as" dropdown | Weakened "users to be able to set up alerts" | Real register, login, logout (D2) |
-| Presented the handoff's choices as the balanced middle option in the brainstorm | Bias from the planning context, visible only against a fresh run | Fresh-context run, triage against the brief |
-| Treated ~80 unflagged triage rows as approved because I had not objected | Silence is not approval; T11 hid a wrong reading of "channels" | Every row reviewed; three extension points (D10) |
-| First phase 3 plan built everything at once | Not checkable step by step | Vertical slices with a manual check each (D17) |
-| A test checked an in-memory fake | PostgreSQL keeps microseconds, .NET 100 ns: every poll would have rewritten every event | Times rounded at the entity; the integration test caught it |
-| Market alerts capped at one per day | Contradicted the brief's market movements | Re-arm with hysteresis and steps (D14) |
-| S4 delivery counted the attempt after the send | A failed save after a send repeated the send without limit | Write-ahead attempt (fresh review) |
-| S5 and S6 committed without a fresh review | The late review found two market rule bugs and an AC11 test that could not see branches on key constants | Fixed with mutation checks (`48fb8f7`) |
+| Presented the handoff's choices as the balanced middle option in the brainstorm | Bias from the planning context, visible only against the fresh run | Triage against the brief, not the handoff |
+| Took my prompt's "a small product feature" for a phrase of the brief | Prompt wording leaks into the output | Product context decided from the brief alone (T56) |
+| Proposed to commit the triage with ~80 unflagged rows "approved" because I had not objected | Silence is not approval; one of them (T11) read "channels" as notification channels only | Every row reviewed in batches of ten; three extension points (D10) |
+| One market event per asset, direction and UTC day | Self-contradictory: an alert created after the day's first move stayed silent all day, and AC8 could not pass | Re-arm with hysteresis and optional steps (D14) |
+| First phase 3 plan built everything at once | Not checkable step by step | Vertical slices, each checked by me (D17) |
+| S2 admin seeding added an existing account to `Admin` | A stranger who registered the seed email first would become admin (fresh review) | Seeding never promotes an existing account |
+| Compared event times at full .NET precision | PostgreSQL keeps microseconds: every poll would have rewritten every event; only the integration test saw it | Times rounded at the entity |
+| S4 delivery counted the attempt after the send | A failed save after a send repeated the send without limit (fresh review) | Attempt saved before the send |
+| S5 and S6 committed without a fresh review | The late review found two market rule bugs and an AC11 test blind to branches on key constants | Fixed and mutation-checked (`48fb8f7`) |
 
 ### What did not go to plan
 
-- S5 and S6 were committed after a self-review only; the fresh reviews ran in phase Z and found real bugs.
-- The log times up to phase Z were estimated by the AI, not read from the clock, and several entries were written in batches. The order is right, the times are not (marked in the log).
-- Session 01 started the triage session twice; one copy was left after one answer.
+- S5 was committed after a self-review only, S6 without a diff review; the fresh reviews ran in phase Z and found bugs that tests and the self-review had missed.
+- The log times up to phase Z were estimated by the AI, not read from the clock, and many entries were written in batches at the end of a slice. The order is right, the clock times are not (marked at the top of the log).
+- Session 01 started the triage session twice; one copy was left after one answer (both are exported).
 
 Details of every decision, check and finding: [process/log.md](process/log.md). Every prompt: [prompts/](prompts/).
 
