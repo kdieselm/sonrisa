@@ -69,7 +69,50 @@ A key literal anywhere else is a violation. Each "how to add" guide ([channel](d
 
 ## How I worked
 
-TODO: phases, how the AI was used, the most important corrections.
+### The plan of attack
+
+I treated the brief as a requirements problem first and a coding problem second. The work ran in phases, each with its own deliverable and commit ([docs/plan.md](docs/plan.md)):
+
+1. **Planning** (claude.ai): a first plan and a handoff file. The AI's first proposal scoped the brief down too far (seeded users, only two event sources); I rejected that (D1–D3).
+2. **Setup and brainstorm:** the handoff was checked line by line against the original task; the brainstorm ran twice, once in the planning context and once in a fresh subagent, to see how much the context biased it.
+3. **Triage:** every brainstorm point was accepted, changed or rejected in a table, with fact checks against official sources. Nothing reached the spec without passing the triage.
+4. **Spec and architecture:** requirements traceability, assumptions, acceptance criteria, a cut list, ADRs. Each was committed raw, attacked by a fresh subagent with [prompts/templates/challenge.md](prompts/templates/challenge.md), and committed again revised.
+5. **Implementation in vertical slices S1–S6** (D17): each slice was planned in 5–10 lines, approved, built with its tests, reviewed, checked by hand in the browser, and committed.
+6. **Wrap-up:** exported transcripts, late reviews, this section.
+
+### How the AI was used
+
+- One Claude Code session per phase or slice, driven by [CLAUDE.md](CLAUDE.md): plan before code, no unapproved packages, log decisions when they happen, commit only after my approval.
+- **Fresh subagents as reviewers**, with no history of the work: the second brainstorm, the spec and architecture challenges, and the diff review of every slice ([prompts/templates/review.md](prompts/templates/review.md)).
+- The AI wrote the code and the tests; I approved or rejected plans, decided the open questions, and ran the manual checks.
+
+### How the output was checked
+
+- **Facts against sources:** package existence and maintenance, framework behaviour (role claim in the token, Identity endpoints), feed URLs and formats against live responses, recorded as fixtures.
+- **Tests that can fail:** after each slice's tests passed, the code was broken on purpose (mutation check) to see the tests fail. Every generated migration was read.
+- **Real infrastructure:** integration tests on PostgreSQL with Testcontainers; CI on GitHub Actions; a clean-clone script that runs the whole stack from the committed state.
+- **Manual check** in the browser at the end of every slice.
+
+### The most important corrections
+
+| What the AI did | What was wrong | What changed |
+|---|---|---|
+| Planned seeded users and a "login as" dropdown | Weakened "users to be able to set up alerts" | Real register, login, logout (D2) |
+| Presented the handoff's choices as the balanced middle option in the brainstorm | Bias from the planning context, visible only against a fresh run | Fresh-context run, triage against the brief |
+| Treated ~80 unflagged triage rows as approved because I had not objected | Silence is not approval; T11 hid a wrong reading of "channels" | Every row reviewed; three extension points (D10) |
+| First phase 3 plan built everything at once | Not checkable step by step | Vertical slices with a manual check each (D17) |
+| A test checked an in-memory fake | PostgreSQL keeps microseconds, .NET 100 ns: every poll would have rewritten every event | Times rounded at the entity; the integration test caught it |
+| Market alerts capped at one per day | Contradicted the brief's market movements | Re-arm with hysteresis and steps (D14) |
+| S4 delivery counted the attempt after the send | A failed save after a send repeated the send without limit | Write-ahead attempt (fresh review) |
+| S5 and S6 committed without a fresh review | The late review found two market rule bugs and an AC11 test that could not see branches on key constants | Fixed with mutation checks (`48fb8f7`) |
+
+### What did not go to plan
+
+- S5 and S6 were committed after a self-review only; the fresh reviews ran in phase Z and found real bugs.
+- The log times up to phase Z were estimated by the AI, not read from the clock, and several entries were written in batches. The order is right, the times are not (marked in the log).
+- Session 01 started the triage session twice; one copy was left after one answer.
+
+Details of every decision, check and finding: [process/log.md](process/log.md). Every prompt: [prompts/](prompts/).
 
 ## Documents
 
