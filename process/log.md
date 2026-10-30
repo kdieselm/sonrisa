@@ -15,6 +15,8 @@ Decisions, AI-review findings, course-corrections and checks, written **when the
 
 Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompts/sessions/README.md).
 
+**Note on times:** up to phase Z the times in the headings were estimated by the AI, not read from the clock; several entries were written in batches at the end of a slice, some with later times than when they were written. The order of entries is right. See "log timestamps were estimated" under phase Z; the real times are in the session transcripts.
+
 ---
 
 ## Planning (claude.ai conversation, before the repo existed)
@@ -744,3 +746,26 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: The spec §8 row "Testcontainers runs PostgreSQL on the GitHub Actions runner" had been unverified since S1.
 - What I did instead: I reported that the CI run for the latest pushed commit (`origin/main` = `ed94280`, S5) finished successfully. The row is now "verified", with the commit named and the source of the report stated. The S6 changes are verified by CI only after they are pushed.
 - How I verified: my report of the Actions run; `git log origin/main` shows `ed94280` as the pushed head.
+
+## Phase Z – wrap-up (Claude Code session 11)
+
+### [2026-10-30 01:14] Decision – full session transcripts exported by a script, not by hand
+- Type: decision
+- What the AI proposed / generated: Export the 13 Claude Code `.jsonl` transcripts to Markdown with a small Node script (`scripts/export-sessions.js`, no packages): user messages verbatim, Claude's replies, plans, questions and answers, subagent prompts and reports, rejected tool calls with the reason; other tool calls one line each; tool output and hidden reasoning left out. Asked whether to export full transcripts or only my prompts.
+- What was wrong with it / what I weighed: Only my prompts would be small but would not show what I reacted to. The first run showed background subagent reports (S4 fresh review) as a bare "task finished" line; they arrive in a separate hand-back message, so the script was fixed to include them. Two extra sessions showed up: session 01 had started the triage session twice (02b, one answer, then left), and the S5/S6 session had a first start that was restarted (10a). Both are exported and labelled, not hidden. Writing the per-phase table also showed that the "every slice is reviewed by a fresh subagent" claim is false for S5 (self-review only) and S6 (no diff review); the prompts README says so.
+- What I did instead: Full transcripts (my choice). `prompts/sessions/README.md` lists every session; `prompts/README.md` lists per phase the opening prompt and the inputs that changed the work. The claude.ai planning conversation (00) stays TODO: it cannot be reached from Claude Code and is exported by me.
+- How I verified: grep of the exports for tokens, keys, Slack webhook URLs, JWTs and passwords: none apart from the seeded `.env.example` passwords; the only email addresses are the two seeded `example.local` ones. Every user message count per session matches the raw transcript (spot-checked 09 and 10). The table's decision numbers (D17, D18, D24, D26) and review entries checked against this log.
+
+### [2026-10-30 01:17] AI-review – log timestamps were estimated by the AI, not taken from the clock
+- Type: ai-review
+- What the AI proposed / generated: Every entry of this log carries a time. While dating the entry above, the AI first wrote 01:40 when the clock said 01:14.
+- What was wrong with it / what I weighed: For each entry, the time in its heading was compared with the moment the transcript shows it was first written to this file. Phases 0–1 and most slices match within minutes. But: the phase 1b and phase 2 entries D8–D16 carry times 20–108 minutes *after* they were written (future times); D19 is dated 69 minutes after it was written; the slice entries were written in one batch at the end of each slice (S5: seven entries at 23:10 dated 22:10–22:50); all seven S6 entries were written in one go at 00:53 with times from 00:10 to 01:20, and the CI entry at 00:59 is dated 09:00. The order of events in the log is right, the clock times are not. Rule 5 ("when they happen") was kept per slice, not per entry.
+- What I did instead: The entry above is dated from the clock (01:14). The handling of the older times is my decision, recorded in the next entry.
+- How I verified: a script over the 13 `.jsonl` transcripts that finds the first tool call containing each heading and prints its timestamp next to the heading's time (three entries were not found: D7, the S3b Compose run and the S3b review, probably written in a form the search does not match).
+
+### [2026-10-30 01:21] Decision – old log times stay as written, marked as estimates
+- Type: decision
+- What the AI proposed / generated: Two options: keep the old times and mark them, or replace each with the time the transcript shows it was written.
+- What was wrong with it / what I weighed: Rewriting would make the log look as if it had been dated correctly all along, which hides the finding. The transcripts in `prompts/sessions/` already give the real times for anyone who needs them.
+- What I did instead: Kept the old times. A note under "Entry format" says that times before this phase are the AI's estimates and points to the entry above. From here on, times come from the clock (`date` before each entry); the first draft of this very entry was again dated four minutes ahead and was corrected.
+- How I verified: the note is at the top of this file; no earlier heading changed (`git diff` touches only the new section and the note).
