@@ -80,7 +80,6 @@ TODO: phases, how the AI was used, the most important corrections.
 | Architecture and ADRs | [docs/architecture.md](docs/architecture.md) |
 | Raw brainstorm output | [docs/brainstorm/](docs/brainstorm/) |
 | Decision and AI-review log | [process/log.md](process/log.md) |
-| Retrospective | `process/retrospective.md` (TODO) |
 | Screenshots | [process/screenshots/](process/screenshots/) |
 | Prompts and templates | [prompts/](prompts/) |
 | Session transcripts | [prompts/sessions/](prompts/sessions/) |

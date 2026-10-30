@@ -18,7 +18,7 @@ const sessions = [
   ["45977b9f", "09-s4-delivery", "09", "S4: email and Slack delivery"],
   ["ab9f3c53", "10a-s6-planning-first-start", "10a", "First start of the S5/S6 session; restarted after one message"],
   ["4abd817a", "10-s5-and-s6", "10", "S5 market movements, S6 hardening"],
-  ["93660086", "11-wrap-up", "11", "Phase Z: prompts export, retrospective, README"],
+  ["93660086", "11-wrap-up", "11", "Phase Z: prompts export, S5/S6 reviews, README"],
 ];
 
 const SKIP_TOOLS = new Set(["mcp__ccd_turn__update_plan", "mcp__ccd_session__mark_chapter", "ToolSearch"]);

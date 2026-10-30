@@ -19,7 +19,7 @@ The task asks me to define my own deliverables, their order and the reasons. Thi
 | 1b | **Brainstorm validation (triage)** | [`docs/brainstorm/03-triage.md`](brainstorm/03-triage.md): every point of both runs with a verdict (accept / reject / defer / verify), a reason tied to the brief, and fact checks against official sources | The brainstorm is AI output and may contain bias and hallucinated facts. Nothing reaches the spec without an explicit decision | `docs: raw triage proposal` → `docs: brainstorm triage decisions` |
 | 2 | Spec | [`docs/spec.md`](spec.md): assumptions, MVP scope, out of scope, acceptance criteria. Built **only** from accepted triage items | Fixes what is built and how it is checked | `docs: raw AI spec draft` → `docs: revise spec after review` |
 | 3 | Architecture | [`docs/architecture.md`](architecture.md): one diagram and 3–5 short ADRs | Fixes how it is built; decisions with alternatives | `docs: raw architecture draft` → `docs: architecture and ADRs` |
-| Z | Wrap-up | README with reviewer path, retrospective, exported prompts | Makes the process reviewable | `docs: readme, retrospective, prompts` |
+| Z | Wrap-up | README with reviewer path and "How I worked", exported prompts (the retrospective was dropped, see the log) | Makes the process reviewable | `docs: export session transcripts and prompts`, `docs: how I worked` (raw draft, then revised) |
 
 ## Implementation slices
 

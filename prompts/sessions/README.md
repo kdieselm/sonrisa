@@ -23,4 +23,4 @@ What an export keeps: every user message verbatim (in Hungarian, as typed), Clau
 | 09 | Claude Code | S4: email and Slack delivery, fresh-subagent review and fixes | [`09-s4-delivery.md`](09-s4-delivery.md) |
 | 10a | Claude Code | First start of the S5/S6 session; restarted after the user's second message ("I would change something") | [`10a-s6-planning-first-start.md`](10a-s6-planning-first-start.md) |
 | 10 | Claude Code | S6 planned first, then S5 market movements, then S6 hardening | [`10-s5-and-s6.md`](10-s5-and-s6.md) |
-| 11 | Claude Code | Phase Z: prompts export, retrospective, README | [`11-wrap-up.md`](11-wrap-up.md) (re-exported at the end of the phase) |
+| 11 | Claude Code | Phase Z: prompts export, late fresh reviews of S5 and S6 and their fixes, README "How I worked" | [`11-wrap-up.md`](11-wrap-up.md) (re-exported at the end of the phase) |
