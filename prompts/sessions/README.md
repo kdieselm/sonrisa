@@ -1,6 +1,6 @@
 # Sessions
 
-Every Claude Code session of the project, exported from the raw `.jsonl` transcripts with [`scripts/export-sessions.js`](../../scripts/export-sessions.js):
+Every session of the project. The claude.ai planning conversation (00) is a prompt list claude.ai wrote itself, reformatted to match; every Claude Code session is exported from its raw `.jsonl` transcript with [`scripts/export-sessions.js`](../../scripts/export-sessions.js):
 
 ```bash
 node scripts/export-sessions.js "$HOME/.claude/projects/D--kmark-net-projects-sonrisa" prompts/sessions
@@ -10,7 +10,7 @@ What an export keeps: every user message verbatim (in Hungarian, as typed), Clau
 
 | # | Tool | Phase | Transcript |
 |---|---|---|---|
-| 00 | claude.ai | Planning conversation, before the repo existed (produced the planning handoff, D1–D3) | TODO: to be exported from claude.ai by hand; not reachable from Claude Code |
+| 00 | claude.ai | Planning conversation, before the repo existed (produced the planning handoff, D1–D3) | [`00-planning-claude-ai.md`](00-planning-claude-ai.md) (prompts in English translation, replies as summaries) |
 | 01 | Claude Code | Phases 0–1: handoff reviewed against the task, repo skeleton, brainstorm (two runs), triage phase added | [`01-setup-and-brainstorm.md`](01-setup-and-brainstorm.md) |
 | 02 | Claude Code | Phase 1b: brainstorm triage in batches of ten, fact checks F1–F11, decisions D8–D13 | [`02-triage.md`](02-triage.md) |
 | 02b | Claude Code | Phase 1b, second copy: session 01 started the triage session twice at the same moment. This copy got one answer (drop Alpha Vantage and every source whose quota testing would exceed) and was then left; work went on in 02 | [`02b-triage-parallel.md`](02b-triage-parallel.md) |
