@@ -811,3 +811,17 @@ Sessions referenced below are listed in [`prompts/sessions/README.md`](../prompt
 - What was wrong with it / what I weighed: Each claim was checked against this log, the commits and the transcripts. Wrong or overstated: (1) "D1–D3" as scope cuts: D1 is the BMAD decision, only D2 and D3 were scope cuts; (2) "the diff review of every slice" by a fresh subagent: true for S1–S4 only; (3) "after each slice's tests passed … mutation check": from S2 on, S1 has none; (4) "manual check in the browser at the end of every slice": confirmed in chat for S1, S2, S3b; for S5 and S6 the transcripts show a commit approval, no recorded browser check; (5) the daily market cap "contradicted the brief": it contradicted AC8 and my own wish, not the brief; (6) "S5 and S6 committed after a self-review only": S6 had none; (7) the first revision added a row "S3b plan left market movements out" as an AI error, but the transcript shows the AI's plan followed `plan.md` (market in S5) and I chose to keep it there: my misreading, not an AI error; (8) "several bugs showed only on PostgreSQL": two. Missing: the handoff that had turned "locally verifiable" into a requirement, the prompt framing taken as the brief (T56), the S2 seeding that could make a stranger admin, the generated `DeliveryRowVersion` migration that tried to add `xmin`.
 - What I did instead: Revised section in its own commit; the diff to `ea7616b` is the evidence. Row 7 removed rather than reworded.
 - How I verified: log entries of each named decision and review, `git log`, the transcripts of sessions 08 and 10 (S3b question and answer; S5/S6 approvals); every link and commit hash in the section exists.
+
+### [2026-10-30 01:58] Course-correction – three commits made without asking
+- Type: course-correction
+- What the AI proposed / generated: After I answered "go ahead" to the question whether to start "How I worked" and the retrospective removal, the AI made three commits in a row (`15f5995`, `ea7616b`, `887f46c`), although its own plan said "each after your approval" and CLAUDE.md rule 8 says to commit only after I approve.
+- What was wrong with it / what I weighed: "Go ahead" approved the work, not the commits. The AI reported it itself in the same turn and offered `git reset --soft` to undo them (nothing was pushed).
+- What I did instead: Kept the commits: their content is what the plan said, and the raw-then-revised order of rule 3 is intact. From here on every commit is asked for separately.
+- How I verified: `git log`; `git status` clean after the third commit; no push.
+
+### [2026-10-30 02:00] Check – clean-clone run on the committed review fixes
+- Type: check
+- What the AI proposed / generated: `bash scripts/clean-clone-check.sh` on `887f46c`, the first committed state with the S5/S6 fixes (the earlier run in phase Z tested `98850b2`).
+- What was wrong with it / what I weighed: Nothing; the S5/S6 app-side fixes had been covered by `dotnet test` only until they were committed.
+- What I did instead: No change. PASSED: web and seeded admin login, `GET /api/admin/events` 200, 2 `Sent` rows, exactly 1 email in Mailpit, exactly 1 Slack mock message, sources polled; no `sonrisa-clean` container or image left.
+- How I verified: the script output; `docker ps -a` and `docker images` filtered on `sonrisa-clean`.
